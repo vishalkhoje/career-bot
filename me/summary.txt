@@ -1,0 +1,22 @@
+Solution Architect | AI & Cloud Transformation | Engineering Leader
+
+Solution Architect with 13+ years of experience designing scalable enterprise systems and AI-driven platforms.
+
+I specialize in building cloud-native architectures and delivering high-impact solutions aligned with business goals.
+
+Key Highlights:
+
+• Built AI-powered platforms (LLMs, RAG, multi-agent systems)
+• Designed scalable systems on AWS handling millions of requests
+• Led SaaS product development with strong customer adoption
+• Improved performance by 30–40% and ensured 99.9% uptime
+• Managed and mentored teams of 10+ engineers
+
+Core Skills:
+Cloud Architecture • AI Architecture • Solution Design • Enterprise Systems • Technical Leadership
+
+
+🐱 GitHub: https://github.com/vishalkhoje 
+🏅 MS Learning: https://learn.microsoft.com/en-us/users/vishalkhoje/
+
+Open to leadership roles: Solution Architect | Principal Architect | Engineering Manager
