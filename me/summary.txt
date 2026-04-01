@@ -4,6 +4,8 @@ Solution Architect with 13+ years of experience designing scalable enterprise sy
 
 I specialize in building cloud-native architectures and delivering high-impact solutions aligned with business goals.
 
+Built an AI-powered chatbot to interactively showcase my experience and projects.
+
 Key Highlights:
 
 • Built AI-powered platforms (LLMs, RAG, multi-agent systems)
@@ -15,8 +17,14 @@ Key Highlights:
 Core Skills:
 Cloud Architecture • AI Architecture • Solution Design • Enterprise Systems • Technical Leadership
 
-
 🐱 GitHub: https://github.com/vishalkhoje 
 🏅 MS Learning: https://learn.microsoft.com/en-us/users/vishalkhoje/
 
 Open to leadership roles: Solution Architect | Principal Architect | Engineering Manager
+
+Reactly completed courses completion Certification:
+1) AWS Certified AI Practitioner AIF-C01 - Certificate of Completion
+https://www.udemy.com/certificate/UC-656435d6-5d9d-400d-b386-a48968fd787d/
+
+2) AI Agents Fundamentals
+https://huggingface.co/datasets/agents-course/certificates/resolve/main/certificates/vishalkhoje/2025-07-07.png

@@ -85,8 +85,6 @@ class Me:
 
     def __init__(self):
         # self.openai = OpenAI()
-        
-
         # Integration with Azure OpenAI
         self.azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         self.openai = AzureOpenAI(
