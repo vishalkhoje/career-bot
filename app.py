@@ -5,7 +5,7 @@
 # • Bring in the Evaluator from the last lab, and add other Agentic patterns.
 
 from dotenv import load_dotenv
-from openai import OpenAI, AzureOpenAI
+from openai import AzureOpenAI
 import json
 import os
 import requests
@@ -14,7 +14,8 @@ import gradio as gr
 
 
 load_dotenv(override=True)
-openai_api_key = os.getenv('OPENAI_API_KEY')
+azure_openai_api_key = os.getenv('AZURE_OPENAI_API_KEY')
+azure_openai_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
 
 def push(text):
@@ -84,13 +85,19 @@ tools = [{"type": "function", "function": record_user_details_json},
 class Me:
 
     def __init__(self):
-        # self.openai = OpenAI()
         # Integration with Azure OpenAI
-        self.azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        if not self.azure_endpoint:
+            raise ValueError("Missing required environment variable: AZURE_OPENAI_ENDPOINT")
+        if not azure_openai_api_key:
+            raise ValueError("Missing required environment variable: AZURE_OPENAI_API_KEY")
+        if not azure_openai_deployment:
+            raise ValueError("Missing required environment variable: AZURE_OPENAI_DEPLOYMENT")
+
         self.openai = AzureOpenAI(
             api_version="2024-12-01-preview",
             azure_endpoint=self.azure_endpoint,
-            api_key=openai_api_key,
+            api_key=azure_openai_api_key,
         )
 
         # Gemini Integration
@@ -99,7 +106,12 @@ class Me:
         # self.gemini = OpenAI(base_url=self.GEMINI_BASE_URL, api_key=self.GOOGLE_API_KEY)
 
         self.name = "Vishal Khoje"
-        reader = PdfReader("me/linkedin.pdf")
+        linkedin_pdf_path = "me/linkedin.pdf"
+        if not os.path.exists(linkedin_pdf_path):
+            raise FileNotFoundError(
+                "Missing LinkedIn PDF. Ensure the file exists at `me/linkedin.pdf`."
+            )
+        reader = PdfReader(linkedin_pdf_path)
         self.linkedin = ""
         for page in reader.pages:
             text = page.extract_text()
@@ -138,7 +150,11 @@ If the user is engaging in discussion, try to steer them towards getting in touc
         done = False
         while not done:
             # integration with Azure OpenAI
-            response = self.openai.chat.completions.create(model="gpt-4.1", messages=messages, tools=tools)
+            response = self.openai.chat.completions.create(
+                model=azure_openai_deployment,
+                messages=messages,
+                tools=tools,
+            )
 
             # integration with GEMINI
             # response = self.gemini.chat.completions.create(model="gemini-2.5-flash", messages=messages, tools=tools)
