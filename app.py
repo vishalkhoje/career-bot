@@ -214,7 +214,7 @@ if __name__ == "__main__":
             fn=me.chat,
             title="Chat with Vishal's AI",
             description="Skip the standard resume. Ask me directly about Vishal's technical skills, past projects, and career highlights.",
-            # type="messages"
+            type="messages"
         ) 
         gr.DeepLinkButton()
 
