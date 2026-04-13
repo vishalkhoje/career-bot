@@ -2,7 +2,7 @@
 #It's a real, valuable tool - the future resume..<br/>
 # • Next, improve the resources - add better context about yourself. If you know RAG, then add a knowledge base about you.<br/>
 # • Add in more tools! You could have a SQL database with common Q&A that the LLM could read and write from?<br/>
-# • Bring in the Evaluator from the last lab, and add other Agentic patterns.
+# • Bring in the Evaluator Agent
 
 from dotenv import load_dotenv
 from openai import AzureOpenAI
