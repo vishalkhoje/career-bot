@@ -171,7 +171,6 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 CAREER DOCUMENTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 ## Personal Summary:
 {self.summary}
 
@@ -179,7 +178,6 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 {self.linkedin}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
-        system_prompt += f"\n\n## Summary:\n{self.summary}\n\n## LinkedIn Profile:\n{self.linkedin}\n\n"
         system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
         return system_prompt
     
