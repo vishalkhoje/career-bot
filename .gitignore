@@ -192,3 +192,5 @@ memory.db
 1_foundations/community-contributions
 2_foundations/community_contribution
 2_foundations/community_contributions
+# Added by code-review-graph
+.code-review-graph/
