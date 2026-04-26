@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Workflow Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'forest' });
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f4f7f6;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 90%;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Career Bot RAG Workflow</h1>
+        <div class="mermaid">
+            graph TD
+                subgraph "1. Data Ingestion (Offline)"
+                    A1[me/linkedin.pdf] --> B1[PyPDFLoader]
+                    A2[me/summary.txt] --> B2[TextLoader]
+                    B1 --> C[RecursiveCharacterTextSplitter]
+                    B2 --> C
+                    C --> D[OpenAI: text-embedding-3-small]
+                    D --> E[(Pinecone: career-bot index)]
+                end
+
+                subgraph "2. Real-Time Chat (app-rag.py)"
+                    F[Gradio UI] -->|User Question| G[OpenAIEmbeddings]
+                    G -->|Query Vector| H[Pinecone Similarity Search]
+                    E -->|Relevant Snippets| H
+                    H -->|Context| I[System Prompt Builder]
+                    I -->|Context + Prompt| J[OpenAI: gpt-4o]
+                    J -->|Response| F
+                end
+
+                subgraph "3. Lead Capture & Notifications"
+                    J -->|Tool Call| L{Function Router}
+                    L -->|record_user_details| M[Pushover Notification]
+                    L -->|record_unknown_question| M
+                end
+        </div>
+    </div>
+</body>
+</html>

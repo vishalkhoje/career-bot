@@ -1,0 +1,60 @@
+Solution Architect | AI & Cloud Transformation | Engineering Leader
+
+Solution Architect with 13+ years of experience designing scalable enterprise systems and AI-driven platforms.
+
+I specialize in building cloud-native architectures and delivering high-impact solutions aligned with business goals.
+
+Built an AI-powered chatbot to interactively showcase my experience and projects.
+
+Key Highlights:
+
+• Built AI-powered platforms (LLMs, RAG, multi-agent systems)
+• Designed scalable systems on AWS handling millions of requests
+• Led SaaS product development with strong customer adoption
+• Improved performance by 30–40% and ensured 99.9% uptime
+• Managed and mentored teams of 10+ engineers
+
+Core Skills:
+Cloud Architecture • AI Architecture • Solution Design • Enterprise Systems • Technical Leadership
+
+Skills:
+Architecture & Leadership: Cloud Architecture, Solution Design, AI Architecture, Distributed Systems, Microservices, Event-Driven Architecture, Technical Leadership, Scalability 
+Tech Stack: Azure, AWS, LangChain, RAG, Pinecone, Kubernetes, Docker, Kafka, React, Python, PostgreSQL, Node.js, JavaScript
+
+🐱 GitHub: https://github.com/vishalkhoje 
+🏅 MS Learning: https://learn.microsoft.com/en-us/users/vishalkhoje/
+
+Open to leadership roles: Solution Architect | Principal Architect | Engineering Manager
+
+Reactly completed courses completion Certification:
+1) AWS Certified AI Practitioner AIF-C01 - Certificate of Completion
+https://www.udemy.com/certificate/UC-656435d6-5d9d-400d-b386-a48968fd787d/
+
+2) AI Agents Fundamentals
+https://huggingface.co/datasets/agents-course/certificates/resolve/main/certificates/vishalkhoje/2025-07-07.png
+
+🏆 KEY ACHIEVEMENTS
+🚀 Improved system performance by 10x (3s → 300ms) for high-scale applications
+💰 Reduced cloud infrastructure cost by 25% through architecture optimization
+🤖 Built LLM-powered AI platforms using Azure OpenAI, improving enterprise productivity
+👥 Led and mentored 10+ engineers, improving delivery efficiency and engineering quality
+
+KEY PROJECTS
+•	AI Resume Chatbot   https://huggingface.co/spaces/vishalkhoje/career_conversation
+	    - Built conversational AI system enabling recruiters to interact with candidate profiles 
+	    - Integrated LLM-based response generation for intelligent querying
+•	AI QA Automation Platform (In Development)
+	    - Designing AI-driven workflows to automate the full test lifecycle
+	    - Targeting elimination of manual QA effort and end-to-end SDLC coverage
+
+AI LEARNING & CREDENTIALS
+•	AWS Certified AI Practitioner AIF-C01 - Completion Badge (2024)
+•	AI Agents Fundamentals – (Hugging Face)
+•	Microsoft Learn AI Skills Challenge - Certificate of Completion
+
+HONORS & AWARDS
+•	Innovation & Creativity Award - TheMathCompany (Mathco), Feb 2024
+•	Hacktoberfest 2023 Honored Contributor - Issued by Hacktoberfest · Oct 2023
+
+Resume Download link:
+https://drive.google.com/uc?export=download&id=1ccqJ7ZFvkjN3NtSLzw3eRo-B5dlmg6jS

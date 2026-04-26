@@ -5,17 +5,21 @@
 # • Bring in the Evaluator Agent
 
 from dotenv import load_dotenv
-from openai import AzureOpenAI
+from openai import OpenAI
 import json
 import os
 import requests
 from pypdf import PdfReader
 import gradio as gr
+from langchain_openai import OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone
 
 
 load_dotenv(override=True)
 azure_openai_api_key = os.getenv('AZURE_OPENAI_API_KEY')
 azure_openai_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
 
 
 def push(text):
@@ -85,19 +89,13 @@ tools = [{"type": "function", "function": record_user_details_json},
 class Me:
 
     def __init__(self):
-        # Integration with Azure OpenAI
-        self.azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-        if not self.azure_endpoint:
-            raise ValueError("Missing required environment variable: AZURE_OPENAI_ENDPOINT")
-        if not azure_openai_api_key:
-            raise ValueError("Missing required environment variable: AZURE_OPENAI_API_KEY")
-        if not azure_openai_deployment:
-            raise ValueError("Missing required environment variable: AZURE_OPENAI_DEPLOYMENT")
+        # Integration with OpenAI
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not self.openai_api_key:
+            raise ValueError("Missing required environment variable: OPENAI_API_KEY")
 
-        self.openai = AzureOpenAI(
-            api_version="2024-12-01-preview",
-            azure_endpoint=self.azure_endpoint,
-            api_key=azure_openai_api_key,
+        self.openai = OpenAI(
+            api_key=self.openai_api_key,
         )
 
         # Gemini Integration
@@ -106,19 +104,19 @@ class Me:
         # self.gemini = OpenAI(base_url=self.GEMINI_BASE_URL, api_key=self.GOOGLE_API_KEY)
 
         self.name = "Vishal Khoje"
-        linkedin_pdf_path = "me/linkedin.pdf"
-        if not os.path.exists(linkedin_pdf_path):
-            raise FileNotFoundError(
-                "Missing LinkedIn PDF. Ensure the file exists at `me/linkedin.pdf`."
-            )
-        reader = PdfReader(linkedin_pdf_path)
-        self.linkedin = ""
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                self.linkedin += text
-        with open("me/summary.txt", "r", encoding="utf-8") as f:
-            self.summary = f.read()
+        
+        # Pinecone Vector Store initialization
+        self.index_name = os.getenv("PINECONE_INDEX_NAME", "career-bot")
+        
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small", # Standard OpenAI embedding model
+            api_key=self.openai_api_key,
+        )
+        self.vector_store = PineconeVectorStore(
+            index_name=self.index_name,
+            embedding=self.embeddings,
+            pinecone_api_key=pinecone_api_key
+        )
 
 
     def handle_tool_call(self, tool_calls):
@@ -132,11 +130,11 @@ class Me:
             results.append({"role": "tool","content": json.dumps(result),"tool_call_id": tool_call.id})
         return results
     
-    def system_prompt(self):
+    def system_prompt(self, context):
         system_prompt = f"You are acting as {self.name}. You are answering questions on {self.name}'s website, \
 particularly questions related to {self.name}'s career, background, skills and experience. \
 Your responsibility is to represent {self.name} for interactions on the website as faithfully as possible. \
-You are given a summary of {self.name}'s background and LinkedIn profile which you can use to answer questions. \
+You are given relevant snippets from {self.name}'s background and LinkedIn profile which you can use to answer questions. \
 Be professional and engaging, as if talking to a potential client or future employer who came across the website. \
 If you don't know the answer to any question, use your record_unknown_question tool to record the question that you couldn't answer, even if it's about something trivial or unrelated to career. \
 If the user is engaging in discussion, try to steer them towards getting in touch via email; ask for their email and record it using your record_user_details tool. "
@@ -145,14 +143,14 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. ONLY answer questions directly related to {self.name}'s career, experience, skills,
-   projects, or professional background as found in the provided documents.
+   projects, or professional background as found in the provided context.
 
 2. Do NOT:
    - Make up or hallucinate any information
    - Answer from general world knowledge
    - Provide assumptions or guesses
 
-3. If the answer is NOT explicitly present in the documents:
+3. If the answer is NOT explicitly present in the context:
    → Respond: "I'm sorry, I can only provide information based on the provided career profile."
    → Then use the record_unknown_question tool to log it.
 
@@ -163,31 +161,47 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 
 5. For projects, experience, or skills → highlight role, impact, and technologies used.
 
-6. For links (GitHub, portfolio, etc.) → only share if explicitly present in the documents.
+6. For links (GitHub, portfolio, etc.) → only share if explicitly present in the context.
 
 7. If the user seems engaged or interested, invite them to get in touch.
    Ask for their email and record it using the record_user_details tool.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 CAREER DOCUMENTS
+📄 CAREER CONTEXT (RELEVANT SNIPPETS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## Personal Summary:
-{self.summary}
-
-## LinkedIn Profile:
-{self.linkedin}
+{context}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
         system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
         return system_prompt
     
     def chat(self, message, history):
-        messages = [{"role": "system", "content": self.system_prompt()}] + history + [{"role": "user", "content": message}]
+        # Retrieve relevant context from Pinecone
+        if self.vector_store:
+            try:
+                docs = self.vector_store.similarity_search(message, k=3)
+                context = "\n\n".join([doc.page_content for doc in docs])
+            except Exception as e:
+                print(f"Error during similarity search: {e}")
+                context = "Context retrieval failed."
+        else:
+            context = "Context retrieval is currently disabled (missing configuration)."
+        
+        # Format history based on input type (handle both Gradio v4 and v5)
+        formatted_history = []
+        for item in history:
+            if isinstance(item, dict):
+                formatted_history.append(item)
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                formatted_history.append({"role": "user", "content": item[0]})
+                formatted_history.append({"role": "assistant", "content": item[1]})
+
+        messages = [{"role": "system", "content": self.system_prompt(context)}] + formatted_history + [{"role": "user", "content": message}]
         done = False
         while not done:
-            # integration with Azure OpenAI
+            # integration with OpenAI
             response = self.openai.chat.completions.create(
-                model=azure_openai_deployment,
+                model="gpt-4o-mini", # Optimized for cost and speed
                 messages=messages,
                 tools=tools,
             )
@@ -207,13 +221,24 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 
 if __name__ == "__main__":
     me = Me()
+    
+    # Environment-based configuration
+    env = os.getenv("ENV", "production")
+    chat_kwargs = {
+        "fn": me.chat,
+        "title": "Chat with Vishal's AI",
+        "description": "Skip the standard resume. Ask me directly about Vishal's technical skills, past projects, and career highlights.",
+    }
+    
+    # Gradio 5.x uses type="messages", Gradio 4.x (local/dev) uses tuples
+    if env == "production":
+        chat_kwargs["type"] = "messages"
+        print("Running in PRODUCTION mode with Gradio 5 compatibility.")
+    else:
+        print("Running in DEVELOPMENT mode with Gradio 4 compatibility.")
+
     with gr.Blocks() as demo:
-        gr.ChatInterface(
-            fn=me.chat,
-            title="Chat with Vishal's AI",
-            description="Skip the standard resume. Ask me directly about Vishal's technical skills, past projects, and career highlights.",
-            type="messages"
-        ) 
+        gr.ChatInterface(**chat_kwargs) 
         gr.DeepLinkButton()
 
     demo.queue()  # 🔥 

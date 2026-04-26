@@ -127,28 +127,26 @@ The app is configured with:
 
 When either tool is invoked, the app sends a Pushover notification to the configured recipient.
 
-## 5) Additional Notes / What’s Missing (and suggested improvements)
+## 5) RAG (Retrieval-Augmented Generation) System
+
+The project now includes an advanced RAG system for more accurate and scalable career conversations.
+
+### Key Components:
+- **Pinecone Vector Database**: Stores document embeddings for fast retrieval.
+- **Data Ingestion (`ingest.py`)**: Processes documents into chunks and uploads them to Pinecone.
+- **Context Retrieval**: `app-rag.py` retrieves only relevant snippets for each user question.
+
+For detailed technical flow and architecture diagrams, see [**RAG_DOCUMENTATION.md**](./RAG_DOCUMENTATION.md).
+
+## 6) Additional Notes / What’s Missing
 
 ### A) Known gotchas
-
-- Ensure the LinkedIn PDF exists as `me/linkedin.pdf` (otherwise startup fails with a `FileNotFoundError`)
-- **Azure deployment name**: set `AZURE_OPENAI_DEPLOYMENT` to your exact Azure deployment name.
+- **Pinecone Index**: Ensure your `PINECONE_API_KEY` is correct in `.env`.
+- **OpenAI Credits**: RAG uses both embedding and completion APIs.
 
 ### B) Privacy and data handling
+- Extracted text is stored in Pinecone. Ensure you review Pinecone's data privacy settings.
 
-- The app extracts text from a LinkedIn PDF and includes it in the prompt. Ensure you have permission to use/process that content.
-- User emails captured through `record_user_details` are sent through Pushover notifications. Treat Pushover messages as sensitive.
-
-### C) How to customize “resume/persona” content
-
-- This repo is intended as a public template:
-  - Replace `me/summary.txt` with your own summary
-- Replace the LinkedIn PDF in `me/` with your own file as `me/linkedin.pdf`
-  - Update the hard-coded name in `app.py` if you want the UI + prompt to use your name instead of `Vishal Khoje`
-
-### D) Suggested future enhancements
-
-- Add a real persistence layer for leads/unknown questions (database or spreadsheet instead of notifications only).
-- Add RAG with chunking and citations (instead of sending the whole extracted text).
-- Add an “admin” view to review captured leads/questions.
+### C) How to customize
+- Run `python3 ingest.py` after updating files in `me/`.
 
