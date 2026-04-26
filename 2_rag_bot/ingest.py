@@ -15,8 +15,6 @@ INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "career-bot")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def ingest_data():
-    print("Starting ingestion process...")
-    
     if not OPENAI_API_KEY:
         print("Error: OPENAI_API_KEY missing in .env")
         return
@@ -24,6 +22,18 @@ def ingest_data():
     if not PINECONE_API_KEY:
         print("Error: PINECONE_API_KEY missing in .env")
         return
+
+    print("Starting ingestion process...")
+    
+    # Clear the LLM response cache to avoid stale answers
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    cache_db = os.path.join(current_dir, ".langchain.db")
+    if os.path.exists(cache_db):
+        print(f"Clearing old cache: {cache_db}...")
+        try:
+            os.remove(cache_db)
+        except Exception as e:
+            print(f"Warning: Could not clear cache: {e}")
 
     # 1. Load Documents
     documents = []

@@ -9,10 +9,13 @@ from openai import OpenAI
 import json
 import os
 import requests
+import time
 from pypdf import PdfReader
 import gradio as gr
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_pinecone import PineconeVectorStore
+from langchain.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
 from pinecone import Pinecone
 
 
@@ -94,9 +97,22 @@ class Me:
         if not self.openai_api_key:
             raise ValueError("Missing required environment variable: OPENAI_API_KEY")
 
+        # Enable Semantic Caching (SQLite) - Path relative to script directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.cache_path = os.path.join(current_dir, ".langchain.db")
+        set_llm_cache(SQLiteCache(database_path=self.cache_path))
+        self.last_cache_check = time.time()
+        
         self.openai = OpenAI(
             api_key=self.openai_api_key,
         )
+        
+        # LangChain Chat Model with Caching enabled
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=self.openai_api_key,
+            temperature=0
+        ).bind_tools(tools)
 
         # Gemini Integration
         # self.GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -175,8 +191,25 @@ If the user is engaging in discussion, try to steer them towards getting in touc
         system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
         return system_prompt
     
+    def _check_cache_expiry(self):
+        """Internal helper to clear cache if older than 10 minutes."""
+        if os.path.exists(self.cache_path):
+            file_age = time.time() - os.path.getmtime(self.cache_path)
+            if file_age > 600: # 10 minutes in seconds
+                print(f"Cache expired (Age: {file_age:.0f}s). Clearing for fresh response...")
+                try:
+                    os.remove(self.cache_path)
+                    # Re-initialize the global cache for the new empty file
+                    set_llm_cache(SQLiteCache(database_path=self.cache_path))
+                except Exception as e:
+                    print(f"Warning: Failed to clear expired cache: {e}")
+        self.last_cache_check = time.time()
+
     def chat(self, message, history):
-        # Retrieve relevant context from Pinecone
+        # 0. Check for cache expiration
+        self._check_cache_expiry()
+
+        # 1. Retrieve relevant context from Pinecone
         if self.vector_store:
             try:
                 docs = self.vector_store.similarity_search(message, k=3)
@@ -197,27 +230,38 @@ If the user is engaging in discussion, try to steer them towards getting in touc
                 formatted_history.append({"role": "assistant", "content": item[1]})
 
         messages = [{"role": "system", "content": self.system_prompt(context)}] + formatted_history + [{"role": "user", "content": message}]
+        
         done = False
         while not done:
-            # integration with OpenAI
-            response = self.openai.chat.completions.create(
-                model="gpt-4o-mini", # Optimized for cost and speed
-                messages=messages,
-                tools=tools,
-            )
-
-            # integration with GEMINI
-            # response = self.gemini.chat.completions.create(model="gemini-2.5-flash", messages=messages, tools=tools)
-
-            if response.choices[0].finish_reason=="tool_calls":
-                message = response.choices[0].message
-                tool_calls = message.tool_calls
-                results = self.handle_tool_call(tool_calls)
-                messages.append(message)
+            # Using LangChain's LLM with built-in caching
+            response = self.llm.invoke(messages)
+            
+            if response.tool_calls:
+                # Add assistant message to history
+                messages.append(response)
+                
+                # Handle tool calls
+                results = self.handle_tool_call_langchain(response.tool_calls)
                 messages.extend(results)
             else:
                 done = True
-        return response.choices[0].message.content
+        
+        return response.content
+
+    def handle_tool_call_langchain(self, tool_calls):
+        results = []
+        for tool_call in tool_calls:
+            tool_name = tool_call['name']
+            arguments = tool_call['args']
+            print(f"Tool called: {tool_name}", flush=True)
+            tool = globals().get(tool_name)
+            result = tool(**arguments) if tool else {}
+            results.append({
+                "role": "tool",
+                "content": json.dumps(result),
+                "tool_call_id": tool_call['id']
+            })
+        return results
 
 if __name__ == "__main__":
     me = Me()
