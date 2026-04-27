@@ -9,4 +9,4 @@ langchain
 langchain-pinecone
 langchain-openai
 langchain-community
-tiktoken
+tiktokenlangsmith

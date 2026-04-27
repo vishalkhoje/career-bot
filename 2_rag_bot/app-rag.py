@@ -10,12 +10,14 @@ import json
 import os
 import requests
 import time
+import sqlite3
+import hashlib
 from pypdf import PdfReader
 import gradio as gr
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_pinecone import PineconeVectorStore
-from langchain.globals import set_llm_cache
-from langchain_community.cache import SQLiteCache
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from langchain_community.callbacks.manager import get_openai_callback
 from pinecone import Pinecone
 
 
@@ -97,21 +99,21 @@ class Me:
         if not self.openai_api_key:
             raise ValueError("Missing required environment variable: OPENAI_API_KEY")
 
-        # Enable Semantic Caching (SQLite) - Path relative to script directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.cache_path = os.path.join(current_dir, ".langchain.db")
-        set_llm_cache(SQLiteCache(database_path=self.cache_path))
         self.last_cache_check = time.time()
+        self._init_manual_cache()
         
         self.openai = OpenAI(
             api_key=self.openai_api_key,
         )
         
-        # LangChain Chat Model with Caching enabled
+        # LangChain Chat Model
         self.llm = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=self.openai_api_key,
-            temperature=0
+            temperature=0,
+            cache=False # Disable LangChain's internal cache to use our manual one
         ).bind_tools(tools)
 
         # Gemini Integration
@@ -178,6 +180,8 @@ If the user is engaging in discussion, try to steer them towards getting in touc
 5. For projects, experience, or skills → highlight role, impact, and technologies used.
 
 6. For links (GitHub, portfolio, etc.) → only share if explicitly present in the context.
+   - If the user asks for a resume, explicitly look for the "Resume Download link" in the context and provide it.
+   - You ARE allowed to share links found in the context.
 
 7. If the user seems engaged or interested, invite them to get in touch.
    Ask for their email and record it using the record_user_details tool.
@@ -191,60 +195,155 @@ If the user is engaging in discussion, try to steer them towards getting in touc
         system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
         return system_prompt
     
+    def _init_manual_cache(self):
+        """Initialize a manual SQLite table for response caching."""
+        conn = sqlite3.connect(self.cache_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS responses (
+                query_hash TEXT PRIMARY KEY,
+                response_text TEXT,
+                timestamp REAL
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
+    def _get_manual_cache(self, query_hash):
+        conn = sqlite3.connect(self.cache_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT response_text FROM responses WHERE query_hash = ?', (query_hash,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else None
+
+    def _set_manual_cache(self, query_hash, response_text):
+        conn = sqlite3.connect(self.cache_path)
+        cursor = conn.cursor()
+        cursor.execute('INSERT OR REPLACE INTO responses (query_hash, response_text, timestamp) VALUES (?, ?, ?)',
+                      (query_hash, response_text, time.time()))
+        conn.commit()
+        conn.close()
+
+    def _generate_cache_key(self, messages):
+        """Create a unique hash for the full message chain."""
+        # Convert messages to a stable JSON string for hashing
+        msg_data = []
+        for m in messages:
+            msg_dict = {
+                "type": m.type,
+                "content": m.content.strip() if isinstance(m.content, str) else m.content,
+            }
+            # Include tool calls in hash if present to distinguish between different agent actions
+            if hasattr(m, "tool_calls"):
+                msg_dict["tool_calls"] = getattr(m, "tool_calls", [])
+            msg_data.append(msg_dict)
+        
+        stable_str = json.dumps(msg_data, sort_keys=True)
+        query_hash = hashlib.sha256(stable_str.encode()).hexdigest()
+        
+        # DEBUG: Help user understand why cache hits or misses
+        print(f"\n--- Cache Debug ---")
+        print(f"Query Hash: {query_hash}")
+        # print(f"Messages being hashed: {stable_str[:200]}...") 
+        print(f"-------------------\n")
+        
+        return query_hash
+    def _generate_cache_key_simple(self, message_list):
+        """Create a simple hash for cache keys from message list."""
+        stable_str = json.dumps(message_list, sort_keys=True)
+        return hashlib.sha256(stable_str.encode()).hexdigest()
+
     def _check_cache_expiry(self):
-        """Internal helper to clear cache if older than 10 minutes."""
+        """Internal helper to clear cache if older than 24 hours."""
         if os.path.exists(self.cache_path):
             file_age = time.time() - os.path.getmtime(self.cache_path)
-            if file_age > 600: # 10 minutes in seconds
+            if file_age > 86400: # 24 hours in seconds
                 print(f"Cache expired (Age: {file_age:.0f}s). Clearing for fresh response...")
                 try:
                     os.remove(self.cache_path)
-                    # Re-initialize the global cache for the new empty file
-                    set_llm_cache(SQLiteCache(database_path=self.cache_path))
+                    self._init_manual_cache()
                 except Exception as e:
                     print(f"Warning: Failed to clear expired cache: {e}")
         self.last_cache_check = time.time()
 
     def chat(self, message, history):
+        # 0. Normalize message for stable cache keys
+        message = message.strip()
+
         # 0. Check for cache expiration
         self._check_cache_expiry()
 
-        # 1. Retrieve relevant context from Pinecone
+        # ✅ 1. Cache key = normalized message ONLY (history-independent).
+        #    Career answers are factual — same question always gets same answer.
+        #    This ensures cache hits whether user asks in turn 1, 2, or 10.
+        normalized_message = message.lower().strip()
+        cache_key = hashlib.sha256(normalized_message.encode()).hexdigest()
+        print(f"\n[Cache] key={cache_key[:12]}  query='{message}'")
+
+        cached_res = self._get_manual_cache(cache_key)
+        if cached_res:
+            print(f"⚡ [CACHE HIT] Served from SQLite. Cost: $0.00")
+            return cached_res
+
+        print(f"🔍 [CACHE MISS] Calling LLM...")
+
+        # 2. Retrieve relevant context from Pinecone (only on cache miss)
         if self.vector_store:
             try:
-                docs = self.vector_store.similarity_search(message, k=3)
+                docs = self.vector_store.similarity_search(message, k=10)
+                docs.sort(key=lambda x: x.page_content)
                 context = "\n\n".join([doc.page_content for doc in docs])
             except Exception as e:
                 print(f"Error during similarity search: {e}")
                 context = "Context retrieval failed."
         else:
             context = "Context retrieval is currently disabled (missing configuration)."
-        
-        # Format history based on input type (handle both Gradio v4 and v5)
-        formatted_history = []
+
+        # 3. Build LangChain messages
+        langchain_messages = [SystemMessage(content=self.system_prompt(context))]
         for item in history:
             if isinstance(item, dict):
-                formatted_history.append(item)
+                role = item.get("role")
+                content = item.get("content")
+                if role == "user":
+                    langchain_messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    langchain_messages.append(AIMessage(content=content))
             elif isinstance(item, (list, tuple)) and len(item) == 2:
-                formatted_history.append({"role": "user", "content": item[0]})
-                formatted_history.append({"role": "assistant", "content": item[1]})
+                langchain_messages.append(HumanMessage(content=item[0]))
+                langchain_messages.append(AIMessage(content=item[1]))
+        langchain_messages.append(HumanMessage(content=message))
 
-        messages = [{"role": "system", "content": self.system_prompt(context)}] + formatted_history + [{"role": "user", "content": message}]
-        
-        done = False
-        while not done:
-            # Using LangChain's LLM with built-in caching
-            response = self.llm.invoke(messages)
-            
-            if response.tool_calls:
-                # Add assistant message to history
-                messages.append(response)
+        # 3. Execute with Token Tracking and Tracing (Only if cache miss)
+        start_time = time.time()
+        with get_openai_callback() as cb:
+            done = False
+            while not done:
+                # Using LangChain's LLM
+                response = self.llm.invoke(langchain_messages)
                 
-                # Handle tool calls
-                results = self.handle_tool_call_langchain(response.tool_calls)
-                messages.extend(results)
-            else:
-                done = True
+                if response.tool_calls:
+                    langchain_messages.append(response)
+                    results = self.handle_tool_call_langchain(response.tool_calls)
+                    # Convert tool results to ToolMessage objects
+                    for res in results:
+                        langchain_messages.append(ToolMessage(
+                            content=res["content"],
+                            tool_call_id=res["tool_call_id"]
+                        ))
+                else:
+                    done = True
+            
+            # Store in manual cache for next time
+            self._set_manual_cache(cache_key, response.content)
+            
+            duration = time.time() - start_time
+            print(f"\n--- Token Usage & Cost (CACHE MISS) ---")
+            print(f"Total Tokens: {cb.total_tokens}")
+            print(f"Total Cost (USD): ${cb.total_cost:.6f}")
+            print(f"Response Time: {duration:.2f}s")
+            print(f"---------------------------\n")
         
         return response.content
 
