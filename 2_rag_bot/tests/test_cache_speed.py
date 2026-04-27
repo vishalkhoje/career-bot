@@ -2,11 +2,11 @@ import time
 import os
 import sys
 
-# Add the directory to path so we can import app-rag
-sys.path.append(os.path.join(os.getcwd(), "2_rag_bot"))
+# Add the project directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-app_rag = __import__("app-rag")
-Me = app_rag.Me
+from src.agent import CareerAgent
+Me = CareerAgent
 
 def test_speed():
     me = Me()

@@ -1,19 +1,19 @@
-# RAG Workflow Documentation
+# Career Bot Workflow Documentation
 
-This document explains the technical architecture and step-by-step flow of the Career Bot's Retrieval-Augmented Generation (RAG) system.
+This document explains the technical architecture and step-by-step flow of the Career Bot Pro's Retrieval-Augmented Generation (RAG) system.
 
 ## 1. High-Level Architecture
 
 The system is divided into two main phases: **Data Ingestion** (Offline/One-time) and **Query Retrieval** (Online/Real-time).
 
-![RAG Workflow Infographic](./rag_workflow.png)
+![Career Bot Workflow](./career_bot_workflow.png)
 
 > [!TIP]
 > **View Visual Diagram**: If the image above or the Mermaid diagram below doesn't render, open [**RAG_WORKFLOW.html**](./RAG_WORKFLOW.html) in your browser to see the full interactive visualization.
 
 ```mermaid
 graph TD
-    subgraph "1. Data Ingestion (Offline)"
+    subgraph "1. DATA INGESTION PHASE (Offline)"
         A1[me/linkedin.pdf] --> B1[PyPDFLoader]
         A2[me/summary.txt] --> B2[TextLoader]
         B1 --> C[RecursiveCharacterTextSplitter]
@@ -22,19 +22,21 @@ graph TD
         D --> E[(Pinecone: career-bot index)]
     end
 
-    subgraph "2. Real-Time Chat (app-rag.py)"
-        F[Gradio UI] -->|User Question| G[OpenAIEmbeddings]
-        G -->|Query Vector| H[Pinecone Similarity Search]
-        E -->|Relevant Snippets| H
-        H -->|Context| I[System Prompt Builder]
-        I -->|Context + Prompt| J[OpenAI: gpt-4o]
-        J -->|Response| F
+    subgraph "PHASE 2: REAL-TIME RAG CHAT (CareerAgent)"
+        F[User] -->|1. Query| G[Gradio UI]
+        G -->|2. Invoke| H[CareerAgent]
+        H -->|3. Check| I{Manual SQLite Cache}
+        I -->|3a. HIT| G
+        I -->|3b. MISS| J[Similarity Search]
+        E -->|4. Context| J
+        J -->|5. Context + Query| K[GPT-4o-mini]
+        K -->|6. STREAMING| G
     end
 
-    subgraph "3. Lead Capture & Notifications"
-        J -->|Tool Call| L{Function Router}
-        L -->|record_user_details| M[Pushover Notification]
-        L -->|record_unknown_question| M
+    subgraph "NOTIFICATIONS & LOGGING"
+        K -->|7. Tool Call| L{Pushover}
+        L -->|Lead Captured| M[Mobile Notification]
+        L -->|Unknown Question| M
     end
 ```
 

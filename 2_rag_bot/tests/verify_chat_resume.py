@@ -2,11 +2,11 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Add the directory to path
-sys.path.append(os.path.join(os.getcwd(), "2_rag_bot"))
+# Add the project directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-app_rag = __import__("app-rag")
-Me = app_rag.Me
+from src.agent import CareerAgent
+Me = CareerAgent
 
 def test_chat_response():
     load_dotenv(override=True)
