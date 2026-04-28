@@ -6,12 +6,21 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.95.0",
-    "gradio>=5.22.0",
+    "gradio~=5.0",                # Pin to official 5.x branch (Avoids the fake v6)
     "openai>=1.68.2",
     "pypdf>=5.4.0",
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
+    "langchain~=0.3.0",           # Force official 0.3.x branch
+    "langchain-community~=0.3.0",
+    "langchain-openai",
+    "langchain-pinecone",
+    "langchain-text-splitters",
+    "rank_bm25",
+    "flashrank",
+    "pinecone",
 ]
+
 
 [dependency-groups]
 dev = [

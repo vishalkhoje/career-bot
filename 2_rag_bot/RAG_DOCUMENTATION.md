@@ -13,30 +13,30 @@ The system is divided into two main phases: **Data Ingestion** (Offline/One-time
 
 ```mermaid
 graph TD
-    subgraph "1. DATA INGESTION PHASE (Offline)"
-        A1[me/linkedin.pdf] --> B1[PyPDFLoader]
-        A2[me/summary.txt] --> B2[TextLoader]
-        B1 --> C[RecursiveCharacterTextSplitter]
-        B2 --> C
-        C --> D[OpenAI: text-embedding-3-small]
-        D --> E[(Pinecone: career-bot index)]
+    subgraph "1. DATA PIPELINE (ingest.py)"
+        A1[me/linkedin.pdf] --> B1[Validation]
+        A2[me/summary.txt] --> B1
+        B1 --> C[Text Splitting]
+        C --> D[Deduplication: Content Hash]
+        D --> E[Versioning: v1.1]
+        E --> F[OpenAI: text-embedding-3-small]
+        F --> G[(Pinecone Vector DB)]
     end
 
-    subgraph "PHASE 2: REAL-TIME RAG CHAT (CareerAgent)"
-        F[User] -->|1. Query| G[Gradio UI]
-        G -->|2. Invoke| H[CareerAgent]
-        H -->|3. Check| I{Manual SQLite Cache}
-        I -->|3a. HIT| G
-        I -->|3b. MISS| J[Similarity Search]
-        E -->|4. Context| J
-        J -->|5. Context + Query| K[GPT-4o-mini]
-        K -->|6. STREAMING| G
+    subgraph "PHASE 2: MULTI-AGENT ORCHESTRATION (CareerAgent)"
+        H[User Query] --> I{Intent Classifier}
+        I -- FACTUAL --> J[Standard RAG Flow]
+        I -- ANALYTICAL --> K[Planner Agent]
+        K --> L[Strategic Reasoning]
+        L --> M[Critic Agent: QC Check]
+        M --> N[Streaming Response]
     end
 
-    subgraph "NOTIFICATIONS & LOGGING"
-        K -->|7. Tool Call| L{Pushover}
-        L -->|Lead Captured| M[Mobile Notification]
-        L -->|Unknown Question| M
+    subgraph "NOTIFICATIONS & MONITORING"
+        N --> O[Response Cache: SQLite]
+        N --> P[Observability: JSONL Metrics]
+        L --> Q{Tool Calling}
+        Q --> R[Pushover: Alerts]
     end
 ```
 
@@ -83,3 +83,44 @@ Whenever you change your LinkedIn PDF or the summary text:
     python3 ingest.py
     ```
     *Note: This will re-index your documents in Pinecone.*
+
+## 8. Production Observability
+
+The system includes a dedicated observability layer ([src/monitoring.py](./src/monitoring.py)) that tracks:
+
+- **Request Latency**: Total time from user input to final streaming chunk.
+- **Token Usage**: Captured via OpenAI usage stats (even for streaming).
+- **Tool Performance**: Success/failure rates and execution duration for every tool call.
+- **Structured Logs**: All events are saved to `career_bot_metrics.jsonl` in JSON format, ready for ingestion by monitoring tools like Datadog or ELK.
+
+### Sample Observability Log
+```json
+{
+  "timestamp": "2026-04-27T12:55:06Z",
+  "query_preview": "Who are you?",
+  "latency_ms": 3048,
+  "token_usage": 2277,
+  "status": "success",
+  "cache_hit": false
+}
+```
+
+## 9. Evaluation System
+
+The system includes a comprehensive evaluation framework ([src/evaluation.py](./src/evaluation.py)) for continuous quality improvement.
+
+### Offline Evaluation
+- **Dataset**: A gold-standard set of queries and expected answers is stored in [tests/eval_dataset.json](./tests/eval_dataset.json).
+- **Runner**: The [tests/run_offline_eval.py](./tests/run_offline_eval.py) script benchmarks the bot on:
+  - **Correctness**: Factual accuracy.
+  - **Groundedness**: Adherence to the provided context.
+  - **Completeness**: How well all parts of the query are answered.
+
+### Online Evaluation (User Feedback)
+- **UI Integration**: Users can provide direct feedback (👍/👎) in the chat interface.
+- **Persistence**: Feedback is stored in `evaluations.db` and linked to the specific request for later analysis.
+
+### Auto-Evaluation (LLM-as-a-Judge)
+After every response, an independent LLM agent evaluates the output for:
+- **Hallucination Risk**: (0.0 to 1.0) Identifying information not present in the context.
+- **Relevance**: (0.0 to 1.0) Ensuring the answer directly addresses the user's intent.

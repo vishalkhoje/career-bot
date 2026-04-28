@@ -83,3 +83,53 @@ def build_system_prompt(context: str, name: str = config.BOT_NAME) -> str:
     closing = f"With this context, please chat with the user, always staying in character as {name}."
 
     return intro + guardrails + closing
+
+def build_intent_classifier_prompt(query: str) -> str:
+    return f"""
+    You are an Intent Classification Agent. 
+    Analyze the user query and decide if it is a simple 'FACTUAL' lookup or a complex 'ANALYTICAL' reasoning task.
+    
+    ANALYTICAL queries include:
+    - Suitability/Fitment checks (e.g., "Am I a good fit for X?")
+    - Comparisons (e.g., "How does my experience compare to Y?")
+    - Summarizations or strategic analysis (e.g., "What are my top 3 strengths?")
+    - Hypothetical scenarios.
+    
+    FACTUAL queries include:
+    - Questions about specific roles, companies, or dates.
+    - Requests for contact info or links.
+    - Simple "What" or "Where" questions.
+
+    User Query: {query}
+    
+    Response: Output ONLY 'FACTUAL' or 'ANALYTICAL'.
+    """
+
+def build_planner_prompt(query: str, context: str) -> str:
+    return f"""
+    You are a Strategic Career Planner. Given a complex query and some initial context, break down the analysis into steps.
+    
+    User Query: {query}
+    Context Snippets: {context[:2000]}...
+    
+    Output a numbered list of steps (max 4) to answer this query professionally.
+    Each step should be a specific action (e.g., 'Extract specific backend technologies', 'Compare years of experience with senior requirements').
+    """
+
+def build_critic_prompt(query: str, response: str, context: str) -> str:
+    return f"""
+    You are a Quality Control Agent (The Critic).
+    Review the proposed answer to the user's query based on the provided context.
+    
+    User Query: {query}
+    Context: {context}
+    Proposed Answer: {response}
+    
+    Check for:
+    1. Hallucinations (info not in context)
+    2. Lack of grounding
+    3. Missing critical information
+    
+    If the answer is perfect, return 'APPROVED'.
+    If not, provide a brief correction or instruction for improvement.
+    """

@@ -12,9 +12,11 @@ A straightforward implementation that passes the entire LinkedIn PDF and summary
 ### 📂 [2_rag_bot](./2_rag_bot)
 An advanced implementation using **RAG (Retrieval-Augmented Generation)** with Pinecone. Best for production and large knowledge bases.
 - **Main Script**: `app-rag.py`
-- **Ingestion Script**: `ingest.py`
+- **Data Pipeline**: `ingest.py` (with validation, deduplication, and versioning).
 - **Database**: Pinecone Vector DB.
-- **Key Feature**: Similarity search for efficient context retrieval.
+- **Key Feature**: Production Observability (Latency, Tokens, Error Tracking).
+- **Core Upgrade**: Multi-Agent Workflow (Intent Classifier -> Planner -> Critic).
+- **New Feature**: Evaluation System (Auto-eval, User Feedback, Offline Benchmarking).
 
 ---
 

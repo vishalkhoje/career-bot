@@ -199,7 +199,12 @@ cache.clear()                                      # Called by ingest.py
 ---
 
 ### `src/retriever.py` — Pinecone Retriever
-Wraps `PineconeVectorStore` and exposes a single `retrieve(query, k)` method. Documents are **sorted alphabetically by content** before being joined into the context string. This deterministic ordering is critical — it ensures the same query always produces the same context, which is essential for cache key stability.
+Wraps `PineconeVectorStore` and exposes a single `retrieve(query, k)` method. 
+    - **Key Feature**: Advanced Retrieval Pipeline:
+    - **Hybrid Search**: Combines semantic vector similarity (OpenAI) with keyword matching (BM25).
+    - **Re-ranking**: Uses a local Cross-Encoder (FlashRank) to prioritize the most relevant chunks.
+    - **Metadata Filtering**: Uses source-based metadata to ground responses in facts.
+Documents are sorted alphabetically by content before being joined into the context string. This deterministic ordering is critical — it ensures the same query always produces the same context, which is essential for cache key stability.
 
 ---
 

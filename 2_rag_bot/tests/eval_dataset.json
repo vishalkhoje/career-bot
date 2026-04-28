@@ -1,0 +1,22 @@
+[
+  {
+    "query": "What is Vishal's total years of experience?",
+    "expected": "Over 13 years of experience in solution architecture and software development."
+  },
+  {
+    "query": "Which technologies does Vishal use for AI?",
+    "expected": "LangChain, RAG, Pinecone, and Azure OpenAI."
+  },
+  {
+    "query": "Has Vishal worked on SaaS products?",
+    "expected": "Yes, he led the development of HRMS & Payroll SaaS, supporting over 500 organizations."
+  },
+  {
+    "query": "Can you share the link to his resume?",
+    "expected": "The response should contain a valid download link to his resume."
+  },
+  {
+    "query": "Am I suitable for a backend architect role?",
+    "expected": "The response should analyze the user's suitability based on Vishal's 13+ years of experience and solution architect background."
+  }
+]

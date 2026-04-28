@@ -48,8 +48,50 @@ def build_ui(agent: CareerAgent) -> gr.Blocks:
     else:
         print("[UI] Running in DEVELOPMENT mode (Gradio 4 compatible).")
 
-    with gr.Blocks() as demo:
-        gr.ChatInterface(**chat_kwargs)
-        gr.DeepLinkButton()
+    with gr.Blocks(title="Vishal's AI") as demo:
+        # Force type="messages" for Gradio 5+ compatibility and better history handling
+        interface = gr.ChatInterface(
+            **chat_kwargs,
+            type="messages"
+        )
+        
+        def handle_feedback(data: gr.LikeData):
+            from .evaluation import EvaluationSystem
+            eval_sys = EvaluationSystem()
+            
+            feedback = "up" if data.liked else "down"
+            
+            # Ensure the value is a string (Gradio 5 'messages' mode can pass dicts/lists)
+            val = data.value
+            if isinstance(val, dict):
+                val = val.get("content", str(val))
+            elif isinstance(val, list):
+                # Extract text if it's a list of message parts
+                texts = [item.get("text", str(item)) if isinstance(item, dict) else str(item) for item in val]
+                val = " ".join(texts)
+            else:
+                val = str(val)
+
+            print(f"[UI] User feedback received: {feedback} for message: {val[:50]}...")
+            
+            import sqlite3
+            with sqlite3.connect(eval_sys.db_path) as conn:
+                # We search for the most recent evaluation where either the query or the response matches
+                # This ensures feedback works whether the user 'likes' their question or the bot's answer.
+                conn.execute(
+                    """
+                    UPDATE evaluations 
+                    SET feedback = ? 
+                    WHERE id = (
+                        SELECT id FROM evaluations 
+                        WHERE query = ? OR response = ? 
+                        ORDER BY id DESC LIMIT 1
+                    )
+                    """,
+                    (feedback, val, val)
+                )
+
+        # In Gradio 5/6, the 'like' event is on the chatbot component
+        interface.chatbot.like(handle_feedback, None, None)
 
     return demo

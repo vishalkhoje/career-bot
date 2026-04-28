@@ -3,52 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Career Bot Project Workflow Diagram</title>
+    <title>Career Bot Pro - RAG Workflow</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #ffffff; color: #1e293b; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
-        .container { max-width: 1100px; width: 100%; background: #ffffff; padding: 40px; border: 1px solid #e2e8f0; border-radius: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        h1 { text-align: center; color: #1e3a8a; margin-bottom: 40px; font-size: 2.2em; font-weight: 800; }
-        .mermaid { background: #ffffff; padding: 20px; }
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        .card {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 2rem;
+        }
+        h1 { color: var(--primary); }
+        h2 { border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-top: 2rem; }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 2rem 0;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .step {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .step-num {
+            background: var(--primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>CAREER BOT PROJECT WORKFLOW DIAGRAM</h1>
+    <div class="header">
+        <h1>Career Bot Pro</h1>
+        <p>Production RAG & Multi-Agent Architecture</p>
+    </div>
+
+    <div class="card">
+        <h2>1. System Architecture Diagram</h2>
         <div class="mermaid">
-            graph TD
-                subgraph "DATA INGESTION"
-                    A1[me/linkedin.pdf] --> B1[ingest.py]
-                    A2[me/summary.txt] --> B1
-                    B1 --> C[Text Splitting & Processing]
-                    C --> D[Convert to Embeddings: OpenAI]
-                    C --> E[Store Vectors: Pinecone]
-                end
+graph TD
+    subgraph "1. DATA PIPELINE (ingest.py)"
+        A1[me/linkedin.pdf] --> B1[Validation]
+        A2[me/summary.txt] --> B1
+        B1 --> C[Text Splitting]
+        C --> D[Deduplication: Content Hash]
+        D --> E[Versioning: v1.1]
+        E --> F[OpenAI: text-embedding-3-small]
+        F --> G[(Pinecone Vector DB)]
+    end
 
-                subgraph "REAL-TIME CHAT"
-                    F[Users] <--> G[Gradio UI]
-                    G --> H[app-rag.py]
-                    H --> I{Manual SQLite Cache}
-                    I -->|HIT| G
-                    I -->|MISS| J[Similarity Search]
-                    E -.-> J
-                    J --> K[System Prompt]
-                    K --> L[GPT-4o-mini]
-                    L -->|Streaming Response| G
-                end
+    subgraph "PHASE 2: MULTI-AGENT ORCHESTRATION (CareerAgent)"
+        H[User Query] --> I{Intent Classifier}
+        I -- FACTUAL --> J[Standard RAG Flow]
+        I -- ANALYTICAL --> K[Planner Agent]
+        K --> L[Strategic Reasoning]
+        L --> M[Critic Agent: QC Check]
+        M --> N[Streaming Response]
+    end
 
-                subgraph "TOOL CALLS & NOTIFICATIONS"
-                    L -->|Tool Call| M[Pushover]
-                    M --> N[Notification Received: Phone]
-                end
-
-                %% Styling to match the diagram's clean look
-                style G fill:#f8fafc,stroke:#0ea5e9,stroke-width:2px
-                style L fill:#f8fafc,stroke:#10b981,stroke-width:2px
-                style B1 fill:#f8fafc,stroke:#1e293b,stroke-width:2px
-                style I fill:#f8fafc,stroke:#334155,stroke-width:2px
+    subgraph "NOTIFICATIONS & MONITORING"
+        N --> O[Response Cache: SQLite]
+        N --> P[Observability: JSONL Metrics]
+        L --> Q{Tool Calling}
+        Q --> R[Pushover: Alerts]
+    end
         </div>
     </div>
+
+    <div class="card">
+        <h2>2. Detailed Agent Workflow</h2>
+        
+        <div class="step">
+            <div class="step-num">1</div>
+            <div><strong>Cache Check:</strong> Normalizes query and checks SQLite for identical previous answers. $0.00 cost path.</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-num">2</div>
+            <div><strong>Intent Classification:</strong> GPT-4o-mini decides if the query needs simple facts or complex reasoning.</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-num">3</div>
+            <div><strong>Retrieval Layer:</strong> Hybrid Search (BM25 + Vector) fetches top 20 chunks, FlashRank re-ranks to top 10.</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-num">4</div>
+            <div><strong>Agent Reasoning:</strong> Strategic Planner breaks analytical tasks into logical steps for deeper analysis.</div>
+        </div>
+        
+        <div class="step">
+            <div class="step-num">5</div>
+            <div><strong>Critic Review:</strong> Quality Control agent verifies the final output against the context to eliminate hallucinations.</div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+    </script>
 </body>
 </html>

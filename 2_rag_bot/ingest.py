@@ -1,148 +1,158 @@
-"""
-ingest.py
-~~~~~~~~~
-Document ingestion pipeline for the RAG career chatbot.
-
-This script loads career documents from the `me/` directory, splits them
-into chunks, embeds them with OpenAI, and upserts them into Pinecone.
-
-It also clears the response cache so the bot generates fresh answers based
-on the updated knowledge base the next time it is queried.
-
-Usage:
-    python3 ingest.py
-
-Run this script every time you update a file in the `me/` directory.
-"""
-
+import hashlib
 import os
 import sys
 import time
+from datetime import datetime
+from typing import List, Set
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 from pinecone import Pinecone, ServerlessSpec
 
-# Import the ResponseCache so we can clear it via its official API
-# (avoids duplicating the db-path logic in two places)
+# Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.cache import ResponseCache
 from src import config
 
-# ── Configuration ──────────────────────────────────────────────────────────────
-# Re-load env explicitly so this script works when run standalone
+# Load env vars
 load_dotenv(override=True)
 
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
-INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "career-bot")
-
-# Chunking parameters tuned for the current dataset (~10k chars total):
-#   chunk_size=1000 keeps paragraphs semantically whole.
-#   chunk_overlap=200 prevents information loss at chunk boundaries.
-CHUNK_SIZE: int = 1000
-CHUNK_OVERLAP: int = 200
-
-
-def ingest_data() -> None:
+class DataPipeline:
     """
-    Run the full ingestion pipeline:
-
-    1. Validate environment variables.
-    2. Clear the SQLite response cache to avoid stale answers.
-    3. Load PDF and text documents from the `me/` directory.
-    4. Split documents into overlapping chunks.
-    5. Generate embeddings via OpenAI.
-    6. Create the Pinecone index (if not already existing) and upsert vectors.
+    Production-grade data pipeline for the career bot.
+    Handles validation, deduplication, versioning, and indexing.
     """
-    # ── 0. Validate required environment variables ────────────────────────────
-    if not OPENAI_API_KEY:
-        print("Error: OPENAI_API_KEY missing in .env")
-        return
+    
+    def __init__(self, force_reindex: bool = False):
+        self.force_reindex = force_reindex
+        self.embeddings = OpenAIEmbeddings(
+            model=config.OPENAI_EMBEDDING_MODEL,
+            api_key=config.OPENAI_API_KEY
+        )
+        self.pc = Pinecone(api_key=config.PINECONE_API_KEY)
+        
+    def validate_source_files(self, file_paths: List[str]) -> List[str]:
+        """
+        Check if files exist and are not empty.
+        """
+        valid_files = []
+        for path in file_paths:
+            if not os.path.exists(path):
+                print(f"[Pipeline] ⚠️ Warning: File not found: {path}")
+                continue
+            if os.path.getsize(path) == 0:
+                print(f"[Pipeline] ⚠️ Warning: File is empty: {path}")
+                continue
+            valid_files.append(path)
+        return valid_files
 
-    if not PINECONE_API_KEY:
-        print("Error: PINECONE_API_KEY missing in .env")
-        return
+    def deduplicate_chunks(self, chunks: List[Document]) -> List[Document]:
+        """
+        Remove duplicate chunks based on content hash.
+        """
+        seen_hashes: Set[str] = set()
+        unique_chunks = []
+        
+        for chunk in chunks:
+            # Create a unique fingerprint for this content
+            content_hash = hashlib.sha256(chunk.page_content.encode()).hexdigest()
+            if content_hash not in seen_hashes:
+                seen_hashes.add(content_hash)
+                # Store hash in metadata for future verification
+                chunk.metadata["content_hash"] = content_hash
+                unique_chunks.append(chunk)
+                
+        print(f"[Pipeline] Deduplication: {len(chunks)} -> {len(unique_chunks)} unique chunks.")
+        return unique_chunks
 
-    print("Starting ingestion process...")
+    def add_versioning_metadata(self, chunks: List[Document]):
+        """
+        Inject version and timestamp into every chunk.
+        """
+        timestamp = datetime.now().isoformat()
+        for chunk in chunks:
+            chunk.metadata.update({
+                "embedding_version": config.EMBEDDING_VERSION,
+                "ingestion_timestamp": timestamp
+            })
 
-    # ── 1. Clear the response cache ───────────────────────────────────────────
-    # Use ResponseCache.clear() so the db-path is always in sync with the app.
-    cache = ResponseCache(db_path=config.CACHE_DB_PATH)
-    cache.clear()
+    def run(self):
+        """
+        Execute the full pipeline.
+        """
+        print(f"\n{'='*50}\nCareer Bot Data Pipeline\n{'='*50}")
+        
+        # 1. Validation
+        source_files = ["me/linkedin.pdf", "me/summary.txt"]
+        valid_files = self.validate_source_files(source_files)
+        if not valid_files:
+            print("[Pipeline] ❌ Error: No valid source files found. Aborting.")
+            return
 
-    # ── 2. Load documents ─────────────────────────────────────────────────────
-    documents = []
+        # 2. Loading
+        all_docs = []
+        for path in valid_files:
+            print(f"[Pipeline] Loading {path}...")
+            loader = PyPDFLoader(path) if path.endswith(".pdf") else TextLoader(path)
+            all_docs.extend(loader.load())
 
-    pdf_path = "me/linkedin.pdf"
-    if os.path.exists(pdf_path):
-        print(f"Loading {pdf_path}...")
-        try:
-            documents.extend(PyPDFLoader(pdf_path).load())
-        except Exception as exc:
-            print(f"Error loading PDF: {exc}")
+        # 3. Chunking
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        raw_chunks = []
+        for doc in all_docs:
+            source_label = "resume" if "linkedin.pdf" in doc.metadata.get("source", "") else "summary"
+            doc_chunks = text_splitter.split_documents([doc])
+            for i, chunk in enumerate(doc_chunks):
+                chunk.metadata.update({"source_type": source_label, "chunk_id": i})
+                raw_chunks.append(chunk)
 
-    summary_path = "me/summary.txt"
-    if os.path.exists(summary_path):
-        print(f"Loading {summary_path}...")
-        try:
-            documents.extend(TextLoader(summary_path).load())
-        except Exception as exc:
-            print(f"Error loading summary: {exc}")
+        # 4. Deduplication
+        unique_chunks = self.deduplicate_chunks(raw_chunks)
 
-    if not documents:
-        print("No documents found to ingest. Exiting.")
-        return
+        # 5. Versioning
+        self.add_versioning_metadata(unique_chunks)
 
-    # ── 3. Split text into chunks ─────────────────────────────────────────────
-    print("Splitting documents into chunks...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
-    )
-    docs = text_splitter.split_documents(documents)
-    print(f"Created {len(docs)} chunks.")
+        # 6. Indexing (Pinecone)
+        index_name = config.PINECONE_INDEX_NAME
+        
+        if self.force_reindex:
+            print(f"[Pipeline] 🔄 FORCE RE-INDEX: Deleting index '{index_name}'...")
+            if index_name in [idx.name for idx in self.pc.list_indexes()]:
+                self.pc.delete_index(index_name)
+                while index_name in [idx.name for idx in self.pc.list_indexes()]:
+                    time.sleep(1)
 
-    # ── 4. Initialise embeddings ──────────────────────────────────────────────
-    print("Initializing OpenAI Embeddings...")
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small",
-        api_key=OPENAI_API_KEY,
-    )
-
-    # ── 5. Initialise Pinecone and upsert ─────────────────────────────────────
-    print("Connecting to Pinecone...")
-    try:
-        pc = Pinecone(api_key=PINECONE_API_KEY)
-
-        existing_indices = [idx.name for idx in pc.list_indexes()]
-        if INDEX_NAME not in existing_indices:
-            print(f"Creating index '{INDEX_NAME}'...")
-            pc.create_index(
-                name=INDEX_NAME,
-                dimension=1536,  # Dimensionality of text-embedding-3-small
+        if index_name not in [idx.name for idx in self.pc.list_indexes()]:
+            print(f"[Pipeline] Creating new index '{index_name}'...")
+            self.pc.create_index(
+                name=index_name,
+                dimension=1536,
                 metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
-            # Wait until the index is ready before upserting
-            while not pc.describe_index(INDEX_NAME).status["ready"]:
+            while not self.pc.describe_index(index_name).status["ready"]:
                 time.sleep(1)
 
-        print(f"Upserting vectors to index '{INDEX_NAME}'...")
+        print(f"[Pipeline] Upserting {len(unique_chunks)} vectors to Pinecone...")
         PineconeVectorStore.from_documents(
-            docs,
-            embeddings,
-            index_name=INDEX_NAME,
-            pinecone_api_key=PINECONE_API_KEY,
+            unique_chunks, 
+            self.embeddings, 
+            index_name=index_name,
+            pinecone_api_key=config.PINECONE_API_KEY
         )
-        print("Ingestion complete!")
 
-    except Exception as exc:
-        print(f"Error during Pinecone operations: {exc}")
-
+        # 7. Cache Sync
+        print("[Pipeline] Clearing response cache to prevent stale answers...")
+        ResponseCache(db_path=config.CACHE_DB_PATH).clear()
+        
+        print(f"{'='*50}\nPipeline Execution Complete!\n{'='*50}")
 
 if __name__ == "__main__":
-    ingest_data()
+    # You can pass --force-reindex as a command line arg if needed
+    force = "--force-reindex" in sys.argv
+    pipeline = DataPipeline(force_reindex=force)
+    pipeline.run()

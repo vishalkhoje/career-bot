@@ -19,6 +19,8 @@ load_dotenv(dotenv_path=os.path.join(_BASE_DIR, ".env"), override=True)
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
 OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+# Versioning for embeddings (increment this if you change the model or chunking logic)
+EMBEDDING_VERSION: str = "v1.1"
 
 # ── Pinecone ──────────────────────────────────────────────────────────────────
 PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
@@ -37,8 +39,18 @@ LANGSMITH_PROJECT: str = os.getenv("LANGSMITH_PROJECT", "career-bot")
 ENV: str = os.getenv("ENV", "production")
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
-# Number of Pinecone chunks to retrieve per query
-RETRIEVAL_K: int = 10
+# Number of chunks to retrieve per query (raw retrieval)
+RETRIEVAL_K: int = 20
+# Enable hybrid + re-ranking pipeline
+USE_ADVANCED_RETRIEVAL: bool = True
+# Final number of chunks after re-ranking
+RERANK_TOP_K: int = 10
+
+# ── Agent Workflow ────────────────────────────────────────────────────────────
+# Enable multi-agent orchestration (Intent -> Planner -> Tools -> Critic)
+USE_AGENT_WORKFLOW: bool = True
+# Enable the Critic agent for hallucination checks
+USE_CRITIC_AGENT: bool = True
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 # SQLite cache file location (same dir as this package's parent)
