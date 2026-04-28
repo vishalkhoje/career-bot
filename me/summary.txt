@@ -42,12 +42,29 @@ https://huggingface.co/datasets/agents-course/certificates/resolve/main/certific
 👥 Led and mentored 10+ engineers, improving delivery efficiency and engineering quality
 
 KEY PROJECTS
-•	AI Resume Chatbot   https://huggingface.co/spaces/vishalkhoje/career_conversation
+•	AI-Powered Career Conversation Chatbot   https://huggingface.co/spaces/vishalkhoje/career_conversation
 	    - Built conversational AI system enabling recruiters to interact with candidate profiles 
 	    - Integrated LLM-based response generation for intelligent querying
 •	AI QA Automation Platform (In Development)
 	    - Designing AI-driven workflows to automate the full test lifecycle
 	    - Targeting elimination of manual QA effort and end-to-end SDLC coverage
+
+Project Name : AI-Driven QA Automation Platform
+Duration: March 2026 to Present
+Organisation MathCo
+- Architected and initiated an AI-powered QA automation platform to automate the complete testing lifecycle, including test planning, generation, execution, and reporting.
+- Defined workflow architecture, toolchain (including Playwright), and agent-based automation strategy to enable autonomous test case creation and execution at scale.
+- Currently driving implementation with engineering teams to transform QA processes into a scalable, AI-led automation system.
+Skills: Large Language Models (LLM), AI Agents, AI Workflow design, Testing, Architecture, Python, AI agent Orchestration 
+
+Personal Project:
+Project Name: AI-Powered Career Conversation Chatbot (https://huggingface.co/spaces/vishalkhoje/career_conversation)
+Duration:: March 2026 to Present
+Organisation: Personal Project
+- Built an AI-driven chatbot that allows recruiters and stakeholders to interactively explore my professional background, technical expertise, and project experience.
+- Designed using LLM-based architecture to deliver contextual responses, simulate real-time conversations, and provide a dynamic alternative to traditional resumes.
+- Focused on improving engagement and accessibility by transforming static profile information into an interactive experience.
+Skills used: Large Language Models (LLM), AI Agents, System Design, Architecture, Python, Testing, RAG, Pinecone, Gradio, Azure OpenAI, LangChain, OpenAI, Streaming 
 
 AI LEARNING & CREDENTIALS
 •	AWS Certified AI Practitioner AIF-C01 - Completion Badge (2024)

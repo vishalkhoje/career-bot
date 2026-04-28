@@ -10,11 +10,12 @@ Keeping the prompt in its own module means it can be:
 """
 
 from __future__ import annotations
+from typing import Optional
 
 from . import config
 
 
-def build_system_prompt(context: str, name: str = config.BOT_NAME) -> str:
+def build_system_prompt(context: str, name: str = config.BOT_NAME, learned_examples: Optional[str] = None) -> str:
     """
     Construct the full system prompt to be sent to the LLM.
 
@@ -26,6 +27,7 @@ def build_system_prompt(context: str, name: str = config.BOT_NAME) -> str:
     Args:
         context: Career context retrieved from Pinecone (relevant chunks).
         name:    The person being represented (defaults to config.BOT_NAME).
+        learned_examples: Optional examples of past corrected failures for few-shot learning.
 
     Returns:
         A fully formatted system prompt string ready for the LLM.
@@ -41,6 +43,18 @@ def build_system_prompt(context: str, name: str = config.BOT_NAME) -> str:
         "If the user is engaging in discussion, try to steer them towards getting in touch via email; "
         "ask for their email and record it using your record_user_details tool."
     )
+
+    learned_section = ""
+    if learned_examples:
+        learned_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧠 LEARNED EXAMPLES (Past Corrections)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use these examples of past mistakes and their corrections to improve your accuracy. 
+Avoid repeating the errors highlighted in the 'Correction' field.
+
+{learned_examples}
+"""
 
     guardrails = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -82,7 +96,7 @@ def build_system_prompt(context: str, name: str = config.BOT_NAME) -> str:
 
     closing = f"With this context, please chat with the user, always staying in character as {name}."
 
-    return intro + guardrails + closing
+    return intro + learned_section + guardrails + closing
 
 def build_intent_classifier_prompt(query: str) -> str:
     return f"""

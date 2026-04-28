@@ -57,6 +57,7 @@ def build_ui(agent: CareerAgent) -> gr.Blocks:
         
         def handle_feedback(data: gr.LikeData):
             from .evaluation import EvaluationSystem
+            import threading
             eval_sys = EvaluationSystem()
             
             feedback = "up" if data.liked else "down"
@@ -78,18 +79,24 @@ def build_ui(agent: CareerAgent) -> gr.Blocks:
             with sqlite3.connect(eval_sys.db_path) as conn:
                 # We search for the most recent evaluation where either the query or the response matches
                 # This ensures feedback works whether the user 'likes' their question or the bot's answer.
-                conn.execute(
+                cursor = conn.execute(
                     """
-                    UPDATE evaluations 
-                    SET feedback = ? 
-                    WHERE id = (
-                        SELECT id FROM evaluations 
-                        WHERE query = ? OR response = ? 
-                        ORDER BY id DESC LIMIT 1
-                    )
+                    SELECT id FROM evaluations 
+                    WHERE query = ? OR response = ? 
+                    ORDER BY id DESC LIMIT 1
                     """,
-                    (feedback, val, val)
+                    (val, val)
                 )
+                row = cursor.fetchone()
+                if row:
+                    eval_id = row[0]
+                    conn.execute("UPDATE evaluations SET feedback = ? WHERE id = ?", (feedback, eval_id))
+                    
+                    # If feedback is negative, trigger self-improvement analysis in background
+                    if feedback == "down":
+                        print(f"[UI] Negative feedback detected for ID {eval_id}. Triggering analysis...")
+                        thread = threading.Thread(target=eval_sys.analyze_and_improve, args=(eval_id,))
+                        thread.start()
 
         # In Gradio 5/6, the 'like' event is on the chatbot component
         interface.chatbot.like(handle_feedback, None, None)

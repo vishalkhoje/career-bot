@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import time
+import os
 from typing import Union
 
 from langchain_community.callbacks.manager import get_openai_callback
@@ -42,6 +43,47 @@ from .tools import TOOL_MAP, TOOL_SCHEMAS
 
 # Conversation history item can be dict (Gradio 5) or 2-tuple (Gradio 4)
 _HistoryItem = Union[dict, tuple]
+
+
+class FeedbackLearner:
+    """
+    Retrieves past corrected failures to provide few-shot demonstrations.
+    """
+    def __init__(self, db_path: str = "evaluations.db"):
+        self.db_path = db_path
+
+    def get_relevant_corrections(self, query: str, limit: int = 3) -> Optional[str]:
+        """
+        Fetch recently corrected failures from the database.
+        In a production system, this would use semantic search. 
+        Here we fetch the most recent unique gold standards.
+        """
+        import sqlite3
+        if not os.path.exists(self.db_path):
+            return None
+            
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # We look for records that have a gold_response
+                cursor = conn.execute("""
+                    SELECT query, gold_response, failure_reason 
+                    FROM evaluations 
+                    WHERE gold_response IS NOT NULL AND gold_response != ''
+                    ORDER BY id DESC LIMIT ?
+                """, (limit,))
+                rows = cursor.fetchall()
+                
+                if not rows:
+                    return None
+                
+                examples = []
+                for q, gold, reason in rows:
+                    examples.append(f"Query: {q}\nError Type: {reason}\nCorrection: {gold}\n---")
+                
+                return "\n".join(examples)
+        except Exception as e:
+            print(f"[FeedbackLearner] Failed to fetch corrections: {e}")
+            return None
 
 
 class CareerAgent:
@@ -75,6 +117,9 @@ class CareerAgent:
 
         # Pinecone-backed semantic retriever
         self.retriever = CareerRetriever()
+        
+        # Learner to pull from evaluations.db
+        self.learner = FeedbackLearner(db_path="evaluations.db")
 
         # LangChain chat model with tools bound.
         # We use separate instances for streaming vs non-streaming to avoid API errors 
@@ -184,10 +229,13 @@ class CareerAgent:
 
                 yield f"🎯 *Plan Ready: {plan.split(chr(10))[0]}... Generating detailed answer...*\n\n"
                 
+                # Fetch learned examples from past corrections
+                learned_examples = self.learner.get_relevant_corrections(message)
+                
                 # Reasoning phase
                 full_response = ""
                 reasoning_messages = [
-                    SystemMessage(content=build_system_prompt(context)),
+                    SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples)),
                     HumanMessage(content=f"Original Query: {message}\n\nStrategic Plan: {plan}\n\nPlease execute the plan and provide a comprehensive, reasoned answer.")
                 ]
                 
@@ -214,7 +262,8 @@ class CareerAgent:
             else:
                 # Standard RAG flow (FACTUAL)
                 print("[Step 4/5: LLM Generation] Generating standard RAG response...")
-                messages = [SystemMessage(content=build_system_prompt(context))]
+                learned_examples = self.learner.get_relevant_corrections(message)
+                messages = [SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples))]
                 messages.extend(self._normalise_history(history))
                 messages.append(HumanMessage(content=message))
 

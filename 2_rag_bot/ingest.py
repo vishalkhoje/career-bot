@@ -97,16 +97,45 @@ class DataPipeline:
         all_docs = []
         for path in valid_files:
             print(f"[Pipeline] Loading {path}...")
-            loader = PyPDFLoader(path) if path.endswith(".pdf") else TextLoader(path)
-            all_docs.extend(loader.load())
+            if path.endswith(".pdf"):
+                loader = PyPDFLoader(path)
+                pages = loader.load()
+                
+                # Clean and merge pages
+                cleaned_pages = []
+                import re
+                for p in pages:
+                    text = p.page_content
+                    # Remove "Page X of Y" and similar footers/headers
+                    text = re.sub(r"Page \d+ of \d+", "", text)
+                    text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE) # Remove isolated page numbers
+                    cleaned_pages.append(text.strip())
+                
+                full_text = "\n\n".join(cleaned_pages)
+                combined_doc = Document(page_content=full_text, metadata={"source": path})
+                all_docs.append(combined_doc)
+            else:
+                loader = TextLoader(path)
+                all_docs.extend(loader.load())
 
         # 3. Chunking
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        # For resumes, we want to keep as much context as possible. 
+        # Instead of small chunks, we use a very large chunk size (30k) 
+        # which effectively keeps the entire resume together as one or two high-context chunks.
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=30000, 
+            chunk_overlap=0, # No overlap needed if it's all in one chunk
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
         raw_chunks = []
         for doc in all_docs:
             source_label = "resume" if "linkedin.pdf" in doc.metadata.get("source", "") else "summary"
+            # Prepend global context
+            global_prefix = f"Candidate: {config.BOT_NAME}\nProfile Context: Complete Career History and Project Details\n\n"
+            
             doc_chunks = text_splitter.split_documents([doc])
             for i, chunk in enumerate(doc_chunks):
+                chunk.page_content = global_prefix + chunk.page_content
                 chunk.metadata.update({"source_type": source_label, "chunk_id": i})
                 raw_chunks.append(chunk)
 

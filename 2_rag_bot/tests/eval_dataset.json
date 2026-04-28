@@ -1,22 +1,42 @@
 [
-  {
-    "query": "What is Vishal's total years of experience?",
-    "expected": "Over 13 years of experience in solution architecture and software development."
-  },
-  {
-    "query": "Which technologies does Vishal use for AI?",
-    "expected": "LangChain, RAG, Pinecone, and Azure OpenAI."
-  },
-  {
-    "query": "Has Vishal worked on SaaS products?",
-    "expected": "Yes, he led the development of HRMS & Payroll SaaS, supporting over 500 organizations."
-  },
-  {
-    "query": "Can you share the link to his resume?",
-    "expected": "The response should contain a valid download link to his resume."
-  },
-  {
-    "query": "Am I suitable for a backend architect role?",
-    "expected": "The response should analyze the user's suitability based on Vishal's 13+ years of experience and solution architect background."
-  }
+    {
+        "query": "Who is Vishal Khoje?",
+        "expected_answer": "Vishal Khoje is a Platform Solution Architect with 13+ years of experience in AI, Cloud, and Distributed Systems. He currently works at MathCo and specializes in building cloud-native architectures and AI-driven platforms like RAG and multi-agent systems.",
+        "category": "Experience"
+    },
+    {
+        "query": "What are Vishal's top skills?",
+        "expected_answer": "Vishal's top skills include Retrieval-Augmented Generation (RAG), Azure OpenAI, CI/CD, Cloud Architecture (AWS/Azure), Technical Leadership, and AI Agent Orchestration.",
+        "category": "Skills"
+    },
+    {
+        "query": "Tell me about the HRMS & Payroll SaaS project.",
+        "expected_answer": "At sumHR, Vishal built and scaled an HRMS & Payroll SaaS supporting 500+ organizations. He led a team of 5+ engineers and used technologies like PHP, MySQL, and Agile practices.",
+        "category": "Projects"
+    },
+    {
+        "query": "Which organization did Vishal work for during the Zorro Project?",
+        "expected_answer": "Vishal worked for Syngenta (via Stefanini Group) as a Technical Lead for the Zorro Project.",
+        "category": "Experience"
+    },
+    {
+        "query": "Does Vishal know how to cook Italian food?",
+        "expected_answer": "I'm sorry, I can only provide information based on the provided career profile. The context does not mention Vishal's cooking skills.",
+        "category": "Groundedness"
+    },
+    {
+        "query": "What was the performance improvement Vishal achieved for the NucliOS platform?",
+        "expected_answer": "Vishal improved NucliOS platform performance by 10x, reducing latency from 3s to 300ms by redesigning the architecture and implementing server-side pagination.",
+        "category": "Metrics"
+    },
+    {
+        "query": "What is the AI QA Automation Platform Vishal is working on?",
+        "expected_answer": "It is an AI-driven platform (at MathCo) designed to automate the full testing lifecycle, including planning, generation, execution, and reporting, targeting the elimination of manual QA effort.",
+        "category": "Projects"
+    },
+    {
+        "query": "How much did Vishal reduce cloud costs at MathCo?",
+        "expected_answer": "Vishal reduced cloud costs by approximately 25% (around $300/month) using auto-scaling and efficient resource utilization.",
+        "category": "Metrics"
+    }
 ]
