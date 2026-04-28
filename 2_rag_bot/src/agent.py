@@ -128,6 +128,9 @@ class CareerAgent:
         cache_hit = False
         error_msg = None
         status = "success"
+        execution_steps = []
+        retrieved_contexts = []
+        eval_scores = {"hallucination": 0.0, "relevance": 0.0, "correctness": 0.0}
 
         try:
             # ── Immediate Feedback ─────────────────────────────────────────────
@@ -143,8 +146,11 @@ class CareerAgent:
             if cached:
                 print("[Cache] ⚡ HIT — serving from SQLite")
                 cache_hit = True
+                execution_steps.append("Cache Hit")
                 yield cached
                 return
+            
+            execution_steps.append("Cache Miss")
 
             # ── Step 2: Intent Classification ──────────────────────────────────
             if config.USE_AGENT_WORKFLOW:
@@ -153,18 +159,23 @@ class CareerAgent:
                 intent_resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
                 intent = "ANALYTICAL" if "ANALYTICAL" in intent_resp.upper() else "FACTUAL"
                 print(f"[Agent] Classified as: {intent}")
+                execution_steps.append(f"Intent: {intent}")
                 yield f"🧠 *Thought: This is an {intent.lower()} query. Searching my memory...*"
             else:
                 intent = "FACTUAL"
+                execution_steps.append("Intent: FACTUAL (Default)")
 
             # ── Step 3: Retrieval ──────────────────────────────────────────────
             print(f"[Step 3/5: Retriever] Fetching relevant context from Pinecone...")
             context = self.retriever.retrieve(message)
+            retrieved_contexts = [context] if context else []
+            execution_steps.append("Retrieval")
             yield f"📚 *Context found. Finalizing reasoning...*"
 
             # ── Step 4: Analytical Branch (Reasoning) ─────────────────────────
             if intent == "ANALYTICAL" and config.USE_AGENT_WORKFLOW:
                 print("[Step 4/5: Planner Agent] Breaking down the reasoning...")
+                execution_steps.append("Planning")
                 yield f"📋 *Strategy: Creating a multi-step plan to answer your complex query...*"
                 
                 planner_prompt = build_planner_prompt(message, context)
@@ -185,10 +196,13 @@ class CareerAgent:
                         full_response += chunk
                         yield full_response
                     tokens_used += cb.total_tokens
+                
+                execution_steps.append("LLM Reasoning")
 
                 # ── Step 5: Critic Review ─────────────────────────────────────
                 if config.USE_CRITIC_AGENT:
                     print("[Step 5/5: Critic Agent] Verifying answer quality...")
+                    execution_steps.append("Critic Review")
                     critic_prompt = build_critic_prompt(message, full_response, context)
                     critic_resp = self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
                     
@@ -211,6 +225,7 @@ class CareerAgent:
                         yield full_response
                     tokens_used += cb.total_tokens
                 
+                execution_steps.append("LLM Generation")
                 print("[Step 5/5: Post-Processing] Finalizing response...")
 
             # ── Final: Cache Storage ──────────────────────────────────────────
@@ -226,13 +241,25 @@ class CareerAgent:
             latency_ms = (time.time() - start_time) * 1000
             
             # ── Observability ──────────────────────────────────────────────────
+            # If successful, try to get scores for deep logging
+            if not cache_hit and status == "success":
+                try:
+                    from .evaluation import EvaluationSystem
+                    eval_sys = EvaluationSystem()
+                    eval_scores = eval_sys.auto_evaluate(message, full_response, context)
+                except Exception as e:
+                    print(f"[Agent] Score fetch failed for monitoring: {e}")
+
             Observability.log_request(
                 query=message,
                 latency_ms=latency_ms,
                 tokens=tokens_used,
                 status=status,
                 error=error_msg,
-                cache_hit=cache_hit
+                cache_hit=cache_hit,
+                steps=execution_steps,
+                retrieved_docs=retrieved_contexts,
+                hallucination_score=eval_scores.get("hallucination", 0.0)
             )
 
             # ── Evaluation ─────────────────────────────────────────────────────
@@ -241,7 +268,7 @@ class CareerAgent:
                 eval_sys = EvaluationSystem()
                 
                 # Auto-evaluate (hallucination & relevance)
-                scores = eval_sys.auto_evaluate(message, full_response, context)
+                scores = eval_scores # Reuse scores we just fetched for monitoring
                 
                 # Persist to evaluations.db
                 eval_id = eval_sys.log_evaluation(

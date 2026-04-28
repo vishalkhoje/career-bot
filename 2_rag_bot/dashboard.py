@@ -69,18 +69,20 @@ def get_dashboard_data():
 
     # 1. Summary Metrics
     avg_latency = mon_df['latency_ms'].mean() if not mon_df.empty else 0
+    total_cost = mon_df['cost_usd'].sum() if 'cost_usd' in mon_df else 0
     avg_correctness = eval_df['correctness_score'].mean() if not eval_df.empty else 0
     avg_relevance = eval_df['relevance_score'].mean() if not eval_df.empty else 0
     avg_hallucination = eval_df['hallucination_score'].mean() if not eval_df.empty else 0
     
     stats_markdown = f"""
     ### 📊 Key Performance Indicators
-    | Metric | Average Value |
+    | Metric | Value |
     | :--- | :--- |
-    | **Latency** | {avg_latency:.2f} ms |
-    | **Correctness** | {avg_correctness:.2f} |
-    | **Relevance** | {avg_relevance:.2f} |
-    | **Hallucination** | {avg_hallucination:.2f} |
+    | **Avg Latency** | {avg_latency:.2f} ms |
+    | **Total Cost** | ${total_cost:.6f} |
+    | **Avg Correctness** | {avg_correctness:.2f} |
+    | **Avg Relevance** | {avg_relevance:.2f} |
+    | **Avg Hallucination** | {avg_hallucination:.2f} |
     """
     
     # 2. Latency Over Time Plot
@@ -101,8 +103,22 @@ def get_dashboard_data():
             fig_scores.update_layout(template="plotly_dark")
 
     # 4. Recent Evaluations Table
-    available_cols = [c for c in ['timestamp', 'query', 'response', 'correctness_score', 'relevance_score', 'feedback'] if c in eval_df.columns]
-    table_df = eval_df[available_cols].head(10) if not eval_df.empty else pd.DataFrame()
+    # Merge with monitoring data to get steps and cost
+    if not eval_df.empty and not mon_df.empty:
+        # We try to join on timestamp if they match closely, but since they might not match exactly, 
+        # we'll just show the latest eval data which now includes the intent anyway.
+        # However, monitoring data has the 'steps'. Let's just use the monitoring data for the table if we want steps.
+        
+        # Add 'steps' and 'cost_usd' from mon_df to eval_df if we can find a match (query preview)
+        eval_df['query_preview'] = eval_df['query'].str[:100]
+        merged_df = pd.merge(eval_df, mon_df[['query_preview', 'steps', 'cost_usd']], on='query_preview', how='left')
+        
+        cols_to_show = ['timestamp', 'query', 'response', 'correctness_score', 'steps', 'cost_usd', 'feedback']
+        available_cols = [c for c in cols_to_show if c in merged_df.columns]
+        table_df = merged_df[available_cols].head(15)
+    else:
+        available_cols = [c for c in ['timestamp', 'query', 'response', 'correctness_score', 'feedback'] if c in eval_df.columns]
+        table_df = eval_df[available_cols].head(10) if not eval_df.empty else pd.DataFrame()
     
     return stats_markdown, fig_latency, fig_scores, table_df
 
