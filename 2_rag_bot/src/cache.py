@@ -141,6 +141,13 @@ class ResponseCache:
         # Re-create the empty schema
         self._init_db()
 
+    def delete(self, key: str) -> None:
+        """
+        Delete a specific cache entry by key.
+        """
+        with self._connect() as conn:
+            conn.execute("DELETE FROM responses WHERE query_hash = ?", (key,))
+
     # ── Private helpers ────────────────────────────────────────────────────────
 
     def _init_db(self) -> None:

@@ -47,21 +47,25 @@ class CareerRetriever:
         if config.USE_ADVANCED_RETRIEVAL:
             self._setup_advanced_pipeline()
 
+    # Class-level cache: only load BM25 docs once per process
+    _bm25_docs_cache = None
+    
     def _setup_advanced_pipeline(self):
         """
         Bootstrap the hybrid + re-ranker pipeline.
-        Note: BM25 requires all documents in memory for local indexing.
+        BM25 docs are cached at class level to avoid re-fetching on every init.
         """
         try:
             print("[Retriever] Initializing Advanced Pipeline (Hybrid + Rerank)...")
             
-            # For a career bot, the dataset is small, so we can fetch all docs 
-            # to build a local BM25 index for hybrid search.
-            # In a massive production app, you'd use Pinecone's native hybrid features.
-            
-            # Fetch some "representative" chunks to seed the BM25 retriever
-            # (In this project, we'll just fetch the top 100 to ensure we cover the whole profile)
-            all_docs = self.vector_store.similarity_search("career profile overview", k=100)
+            # Use cached docs if available
+            if CareerRetriever._bm25_docs_cache is None:
+                all_docs = self.vector_store.similarity_search("career profile overview", k=20)
+                CareerRetriever._bm25_docs_cache = all_docs
+                print(f"[Retriever] Fetched {len(all_docs)} docs for BM25 (cached for future).")
+            else:
+                all_docs = CareerRetriever._bm25_docs_cache
+                print(f"[Retriever] Using cached BM25 docs ({len(all_docs)} docs).")
             
             if not all_docs:
                 print("[Retriever] Warning: No documents found to seed BM25. Falling back to vector search.")
@@ -77,8 +81,7 @@ class CareerRetriever:
                 weights=[0.7, 0.3]
             )
             
-            # 3. Add Re-ranker (FlashRank)
-            # This will take the ensemble results and re-order them using a Cross-Encoder
+            # Add Re-ranker (FlashRank)
             compressor = FlashrankRerank(top_n=config.RERANK_TOP_K)
             self.compression_retriever = ContextualCompressionRetriever(
                 base_compressor=compressor, 

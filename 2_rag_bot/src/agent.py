@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import time
 import os
+import threading
 from typing import Union
 
 from langchain_community.callbacks.manager import get_openai_callback
@@ -176,6 +177,7 @@ class CareerAgent:
         execution_steps = []
         retrieved_contexts = []
         eval_scores = {"hallucination": 0.0, "relevance": 0.0, "correctness": 0.0}
+        latency_breakdown = {}
 
         from .utils import retry_with_backoff, safe_llm_call
 
@@ -199,43 +201,62 @@ class CareerAgent:
             
             execution_steps.append("Cache Miss")
 
-            # ── Step 2: Intent Classification (with Retry) ──────────────────────
-            if config.USE_AGENT_WORKFLOW:
-                print(f"[Step 2/5: Intent Classifier] Analyzing query type...")
-                
-                @retry_with_backoff(retries=2)
-                def get_intent():
-                    intent_prompt = build_intent_classifier_prompt(message)
-                    return self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
-                
+            # ── Steps 2+3: Intent Classification + Retrieval (PARALLEL) ──────────
+            # These two operations are independent — run them concurrently
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            step_start = time.time()
+            yield "🔍 *Classifying your query and searching my memory simultaneously...*"
+            
+            def _classify_intent():
+                """LLM-based intent classification."""
                 try:
-                    intent_resp = get_intent()
-                    intent = "ANALYTICAL" if "ANALYTICAL" in intent_resp.upper() else "FACTUAL"
-                except Exception:
-                    print("[Fallback] Intent classification failed. Defaulting to FACTUAL.")
-                    intent = "FACTUAL"
+                    from .prompt import build_intent_classifier_prompt
+                    intent_prompt = build_intent_classifier_prompt(message)
+                    resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
+                    return "ANALYTICAL" if "ANALYTICAL" in resp.upper() else "FACTUAL"
+                except Exception as e:
+                    print(f"[Fallback] Intent classification failed: {e}. Defaulting to FACTUAL.")
+                    return "FACTUAL"
+            
+            def _retrieve_context():
+                """Pinecone retrieval."""
+                try:
+                    return self.retriever.retrieve(message)
+                except Exception as e:
+                    print(f"[Fallback] Retrieval failed: {e}. Using empty context.")
+                    return ""
+            
+            if config.USE_AGENT_WORKFLOW:
+                print(f"[Steps 2+3: PARALLEL] Intent Classifier + Retriever launching...")
                 
-                print(f"[Agent] Classified as: {intent}")
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    intent_future = executor.submit(_classify_intent)
+                    retrieval_future = executor.submit(_retrieve_context)
+                    
+                    intent = intent_future.result()
+                    context = retrieval_future.result()
+                
+                parallel_ms = (time.time() - step_start) * 1000
+                latency_breakdown['intent+retrieval_ms (parallel)'] = parallel_ms
+                print(f"[Agent] Classified as: {intent} | Retrieval done | Parallel time: {parallel_ms:.0f}ms")
+                
                 execution_steps.append(f"Intent: {intent}")
-                yield f"🧠 *Thought: This is an {intent.lower()} query. Searching my memory...*"
+                execution_steps.append("Retrieval")
+                yield f"🧠 *Thought: This is an {intent.lower()} query. Context found!*"
             else:
                 intent = "FACTUAL"
                 execution_steps.append("Intent: FACTUAL (Default)")
-
-            # ── Step 3: Retrieval ──────────────────────────────────────────────
-            print(f"[Step 3/5: Retriever] Fetching relevant context from Pinecone...")
-            try:
-                context = self.retriever.retrieve(message)
-            except Exception as e:
-                print(f"[Fallback] Retrieval failed: {e}. Using empty context.")
-                context = ""
+                context = _retrieve_context()
+                latency_breakdown['retrieval_ms'] = (time.time() - step_start) * 1000
+                execution_steps.append("Retrieval")
             
             retrieved_contexts = [context] if context else []
-            execution_steps.append("Retrieval")
-            yield f"📚 *Context found. Finalizing reasoning...*"
+            yield f"📚 *Finalizing reasoning...*"
 
             # ── Step 4: Analytical Branch (Reasoning with Retry) ────────────────
             if intent == "ANALYTICAL" and config.USE_AGENT_WORKFLOW:
+                step_start = time.time()
                 print("[Step 4/5: Planner Agent] Breaking down the reasoning...")
                 execution_steps.append("Planning")
                 yield f"📋 *Strategy: Creating a multi-step plan to answer your complex query...*"
@@ -251,13 +272,12 @@ class CareerAgent:
                     yield f"🎯 *Plan Ready: {plan.split(chr(10))[0]}... Generating detailed answer...*\n\n"
                 except Exception:
                     print("[Fallback] Planning failed. Falling back to simple RAG response.")
-                    intent = "FACTUAL" # Force fallback to simple RAG
+                    intent = "FACTUAL"
+                latency_breakdown['planner_ms'] = (time.time() - step_start) * 1000
                 
                 if intent == "ANALYTICAL":
-                    # Fetch learned examples from past corrections
                     learned_examples = self.learner.get_relevant_corrections(message)
                     
-                    # Reasoning phase
                     full_response = ""
                     history_messages = self._normalise_history(history)
                     
@@ -269,6 +289,7 @@ class CareerAgent:
                         HumanMessage(content=f"Original Query: {message}\n\nStrategic Plan: {plan}\n\nPlease execute the plan and provide a comprehensive, reasoned answer.")
                     )
                     
+                    step_start = time.time()
                     try:
                         with get_openai_callback() as cb:
                             for chunk in self._invoke_llm_stream(reasoning_messages):
@@ -279,14 +300,18 @@ class CareerAgent:
                     except Exception as e:
                         print(f"[Fallback] Reasoning stream failed: {e}. Falling back to simple RAG.")
                         intent = "FACTUAL"
+                    latency_breakdown['llm_reasoning_ms'] = (time.time() - step_start) * 1000
 
-                # ── Step 5: Critic Review (with Retry) ─────────────────────────
-                if intent == "ANALYTICAL" and config.USE_CRITIC_AGENT:
-                    print("[Step 5/5: Critic Agent] Verifying answer quality...")
+                # ── Step 5: Critic Review (CONDITIONAL — only for long context) ──
+                context_len = len(context) if context else 0
+                if intent == "ANALYTICAL" and config.USE_CRITIC_AGENT and context_len > 3000:
+                    step_start = time.time()
+                    print("[Step 5/5: Critic Agent] Verifying answer quality (context is large)...")
                     
                     @retry_with_backoff(retries=1)
                     def run_critic():
-                        critic_prompt = build_critic_prompt(message, full_response, context)
+                        # Only pass first 2000 chars of context to Critic to reduce prompt size
+                        critic_prompt = build_critic_prompt(message, full_response, context[:2000])
                         return self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
                     
                     try:
@@ -298,9 +323,13 @@ class CareerAgent:
                         execution_steps.append("Critic Review")
                     except Exception:
                         print("[Fallback] Critic review failed. Proceeding with unverified answer.")
+                    latency_breakdown['critic_ms'] = (time.time() - step_start) * 1000
+                elif intent == "ANALYTICAL":
+                    print("[Step 5/5: Critic Agent] ⏭ Skipped (context is short, low risk)")
             
             # ── Fallback Branch: Standard RAG flow ────────────────────────────
             if intent == "FACTUAL":
+                step_start = time.time()
                 print("[Step 4/5: LLM Generation] Generating standard RAG response...")
                 learned_examples = self.learner.get_relevant_corrections(message)
                 messages = [SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples))]
@@ -309,7 +338,6 @@ class CareerAgent:
 
                 full_response = ""
                 with get_openai_callback() as cb:
-                    # Final safety for streaming
                     try:
                         for chunk in self._invoke_llm_stream(messages):
                             full_response += chunk
@@ -319,6 +347,7 @@ class CareerAgent:
                         print(f"[Critical Fallback] Final LLM Stream failed: {e}")
                         yield "I apologize, but I am having trouble connecting to my service right now. Please try again in a few seconds."
                         return
+                latency_breakdown['llm_generation_ms'] = (time.time() - step_start) * 1000
                 
                 execution_steps.append("LLM Generation")
                 print("[Step 5/5: Post-Processing] Finalizing response...")
@@ -335,16 +364,14 @@ class CareerAgent:
         finally:
             latency_ms = (time.time() - start_time) * 1000
             
-            # ── Observability ──────────────────────────────────────────────────
-            # If successful, try to get scores for deep logging
-            if not cache_hit and status == "success":
-                try:
-                    from .evaluation import EvaluationSystem
-                    eval_sys = EvaluationSystem()
-                    eval_scores = eval_sys.auto_evaluate(message, full_response, context)
-                except Exception as e:
-                    print(f"[Agent] Score fetch failed for monitoring: {e}")
+            # ── Latency Breakdown ──────────────────────────────────────────────
+            print(f"\n--- ⏱️ Latency Breakdown ---")
+            for component, ms in latency_breakdown.items():
+                print(f"  {component}: {ms:.0f}ms")
+            print(f"  TOTAL (user-facing): {latency_ms:.0f}ms")
+            print(f"----------------------------")
 
+            # ── Observability (log immediately, WITHOUT auto-eval) ────────────
             Observability.log_request(
                 query=message,
                 latency_ms=latency_ms,
@@ -354,30 +381,39 @@ class CareerAgent:
                 cache_hit=cache_hit,
                 steps=execution_steps,
                 retrieved_docs=retrieved_contexts,
-                hallucination_score=eval_scores.get("hallucination", 0.0)
+                hallucination_score=0.0
             )
 
-            # ── Evaluation ─────────────────────────────────────────────────────
+            # ── Background Evaluation (ASYNC — does NOT block the user) ───────
             if not cache_hit and status == "success":
-                from .evaluation import EvaluationSystem
-                eval_sys = EvaluationSystem()
+                def _background_eval(q, resp, ctx, lat, tok, intent_val):
+                    try:
+                        from .evaluation import EvaluationSystem
+                        eval_sys = EvaluationSystem()
+                        scores = eval_sys.auto_evaluate(q, resp, ctx)
+                        eval_id = eval_sys.log_evaluation(
+                            query=q,
+                            response=resp,
+                            latency_ms=lat,
+                            tokens=tok,
+                            cache_hit=False,
+                            hallucination_score=scores["hallucination"],
+                            relevance_score=scores["relevance"],
+                            correctness_score=scores.get("correctness", 0.0),
+                            groundedness_score=scores.get("groundedness", 0.0),
+                            metadata={"intent": intent_val}
+                        )
+                        print(f"[Eval] ✅ Background eval complete: ID={eval_id} | G={scores.get('groundedness',0):.2f} | R={scores['relevance']:.2f} | H={scores['hallucination']:.2f}")
+                    except Exception as e:
+                        print(f"[Eval] Background eval failed: {e}")
                 
-                # Auto-evaluate (hallucination & relevance)
-                scores = eval_scores # Reuse scores we just fetched for monitoring
-                
-                # Persist to evaluations.db
-                eval_id = eval_sys.log_evaluation(
-                    query=message,
-                    response=full_response,
-                    latency_ms=latency_ms,
-                    tokens=tokens_used,
-                    cache_hit=cache_hit,
-                    hallucination_score=scores["hallucination"],
-                    relevance_score=scores["relevance"],
-                    correctness_score=scores.get("correctness", 0.0),
-                    metadata={"intent": intent}
+                thread = threading.Thread(
+                    target=_background_eval,
+                    args=(message, full_response, context, latency_ms, tokens_used, intent),
+                    daemon=True
                 )
-                print(f"[Eval] Entry saved: ID={eval_id} | Hallucination={scores['hallucination']} | Relevance={scores['relevance']} | Correctness={scores.get('correctness', 0.0)}")
+                thread.start()
+                print("[Eval] 🔄 Auto-evaluation started in background thread.")
 
     # ── Private helpers ─────────────────────────────────────────────────────────
 

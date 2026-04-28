@@ -40,17 +40,17 @@ ENV: str = os.getenv("ENV", "production")
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
 # Number of chunks to retrieve per query (raw retrieval)
-RETRIEVAL_K: int = 20
+RETRIEVAL_K: int = 5
 # Enable hybrid + re-ranking pipeline
 USE_ADVANCED_RETRIEVAL: bool = True
 # Final number of chunks after re-ranking
-RERANK_TOP_K: int = 10
+RERANK_TOP_K: int = 3
 
 # ── Agent Workflow ────────────────────────────────────────────────────────────
 # Enable multi-agent orchestration (Intent -> Planner -> Tools -> Critic)
 USE_AGENT_WORKFLOW: bool = True
-# Enable the Critic agent for hallucination checks
-USE_CRITIC_AGENT: bool = True
+# Enable the Critic agent for hallucination checks (adds ~5s latency)
+USE_CRITIC_AGENT: bool = False
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
 # SQLite cache file location (same dir as this package's parent)

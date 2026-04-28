@@ -47,6 +47,23 @@ KEY PROJECTS
 	    - Designing AI-driven workflows to automate the full test lifecycle
 	    - Targeting elimination of manual QA effort and end-to-end SDLC coverage
 
+Project: AI-Driven QA Automation Platform
+Duration : Mar 2026 – Present
+Organisation: MathCo
+- Architected and initiated an AI-powered QA automation platform to automate the complete testing lifecycle, including test planning, generation, execution, and reporting.
+- Defined workflow architecture, toolchain (including Playwright), and agent-based automation strategy to enable autonomous test case creation and execution at scale.
+- Currently driving implementation with engineering teams to transform QA processes into a scalable, AI-led automation system.
+Skills used: Large Language Models (LLM), AI Agents, System Design, Architecture, Python, Testing
+
+Project: AI-Powered Career Conversation Chatbot
+Duration : Mar 2026 – Present
+Organisation: Personal Project
+- Built an AI-driven chatbot that allows recruiters and stakeholders to interactively explore my professional background, technical expertise, and project experience.
+- Designed using LLM-based architecture to deliver contextual responses, simulate real-time conversations, and provide a dynamic alternative to traditional resumes.
+- Focused on improving engagement and accessibility by transforming static profile information into an interactive experience.
+Skills used: Large Language Models (LLM), AI Agents, System Design, Architecture, Python, Testing
+
+
 AI LEARNING & CREDENTIALS
 •	AWS Certified AI Practitioner AIF-C01 - Completion Badge (2024)
 •	AI Agents Fundamentals – (Hugging Face)
