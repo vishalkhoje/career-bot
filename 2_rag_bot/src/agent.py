@@ -177,6 +177,8 @@ class CareerAgent:
         retrieved_contexts = []
         eval_scores = {"hallucination": 0.0, "relevance": 0.0, "correctness": 0.0}
 
+        from .utils import retry_with_backoff, safe_llm_call
+
         try:
             # ── Immediate Feedback ─────────────────────────────────────────────
             yield "🔍 *Analyzing your question...*"
@@ -197,12 +199,22 @@ class CareerAgent:
             
             execution_steps.append("Cache Miss")
 
-            # ── Step 2: Intent Classification ──────────────────────────────────
+            # ── Step 2: Intent Classification (with Retry) ──────────────────────
             if config.USE_AGENT_WORKFLOW:
                 print(f"[Step 2/5: Intent Classifier] Analyzing query type...")
-                intent_prompt = build_intent_classifier_prompt(message)
-                intent_resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
-                intent = "ANALYTICAL" if "ANALYTICAL" in intent_resp.upper() else "FACTUAL"
+                
+                @retry_with_backoff(retries=2)
+                def get_intent():
+                    intent_prompt = build_intent_classifier_prompt(message)
+                    return self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
+                
+                try:
+                    intent_resp = get_intent()
+                    intent = "ANALYTICAL" if "ANALYTICAL" in intent_resp.upper() else "FACTUAL"
+                except Exception:
+                    print("[Fallback] Intent classification failed. Defaulting to FACTUAL.")
+                    intent = "FACTUAL"
+                
                 print(f"[Agent] Classified as: {intent}")
                 execution_steps.append(f"Intent: {intent}")
                 yield f"🧠 *Thought: This is an {intent.lower()} query. Searching my memory...*"
@@ -212,55 +224,83 @@ class CareerAgent:
 
             # ── Step 3: Retrieval ──────────────────────────────────────────────
             print(f"[Step 3/5: Retriever] Fetching relevant context from Pinecone...")
-            context = self.retriever.retrieve(message)
+            try:
+                context = self.retriever.retrieve(message)
+            except Exception as e:
+                print(f"[Fallback] Retrieval failed: {e}. Using empty context.")
+                context = ""
+            
             retrieved_contexts = [context] if context else []
             execution_steps.append("Retrieval")
             yield f"📚 *Context found. Finalizing reasoning...*"
 
-            # ── Step 4: Analytical Branch (Reasoning) ─────────────────────────
+            # ── Step 4: Analytical Branch (Reasoning with Retry) ────────────────
             if intent == "ANALYTICAL" and config.USE_AGENT_WORKFLOW:
                 print("[Step 4/5: Planner Agent] Breaking down the reasoning...")
                 execution_steps.append("Planning")
                 yield f"📋 *Strategy: Creating a multi-step plan to answer your complex query...*"
                 
-                planner_prompt = build_planner_prompt(message, context)
-                plan = self.non_streaming_llm.invoke([HumanMessage(content=planner_prompt)]).content
-                print(f"[Agent] Strategic Plan: {plan.replace(chr(10), ' | ')}")
-
-                yield f"🎯 *Plan Ready: {plan.split(chr(10))[0]}... Generating detailed answer...*\n\n"
+                @retry_with_backoff(retries=2)
+                def get_plan():
+                    planner_prompt = build_planner_prompt(message, context)
+                    return self.non_streaming_llm.invoke([HumanMessage(content=planner_prompt)]).content
                 
-                # Fetch learned examples from past corrections
-                learned_examples = self.learner.get_relevant_corrections(message)
+                try:
+                    plan = get_plan()
+                    print(f"[Agent] Strategic Plan: {plan.replace(chr(10), ' | ')}")
+                    yield f"🎯 *Plan Ready: {plan.split(chr(10))[0]}... Generating detailed answer...*\n\n"
+                except Exception:
+                    print("[Fallback] Planning failed. Falling back to simple RAG response.")
+                    intent = "FACTUAL" # Force fallback to simple RAG
                 
-                # Reasoning phase
-                full_response = ""
-                reasoning_messages = [
-                    SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples)),
-                    HumanMessage(content=f"Original Query: {message}\n\nStrategic Plan: {plan}\n\nPlease execute the plan and provide a comprehensive, reasoned answer.")
-                ]
-                
-                with get_openai_callback() as cb:
-                    for chunk in self._invoke_llm_stream(reasoning_messages):
-                        full_response += chunk
-                        yield full_response
-                    tokens_used += cb.total_tokens
-                
-                execution_steps.append("LLM Reasoning")
-
-                # ── Step 5: Critic Review ─────────────────────────────────────
-                if config.USE_CRITIC_AGENT:
-                    print("[Step 5/5: Critic Agent] Verifying answer quality...")
-                    execution_steps.append("Critic Review")
-                    critic_prompt = build_critic_prompt(message, full_response, context)
-                    critic_resp = self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
+                if intent == "ANALYTICAL":
+                    # Fetch learned examples from past corrections
+                    learned_examples = self.learner.get_relevant_corrections(message)
                     
-                    if "APPROVED" in critic_resp.upper():
-                        print("[Agent] ✅ Critic Status: APPROVED")
-                    else:
-                        print(f"[Agent] ⚠️ Critic Suggestion: {critic_resp[:100]}...")
+                    # Reasoning phase
+                    full_response = ""
+                    history_messages = self._normalise_history(history)
+                    
+                    reasoning_messages = [
+                        SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples)),
+                    ]
+                    reasoning_messages.extend(history_messages)
+                    reasoning_messages.append(
+                        HumanMessage(content=f"Original Query: {message}\n\nStrategic Plan: {plan}\n\nPlease execute the plan and provide a comprehensive, reasoned answer.")
+                    )
+                    
+                    try:
+                        with get_openai_callback() as cb:
+                            for chunk in self._invoke_llm_stream(reasoning_messages):
+                                full_response += chunk
+                                yield full_response
+                            tokens_used += cb.total_tokens
+                        execution_steps.append("LLM Reasoning")
+                    except Exception as e:
+                        print(f"[Fallback] Reasoning stream failed: {e}. Falling back to simple RAG.")
+                        intent = "FACTUAL"
+
+                # ── Step 5: Critic Review (with Retry) ─────────────────────────
+                if intent == "ANALYTICAL" and config.USE_CRITIC_AGENT:
+                    print("[Step 5/5: Critic Agent] Verifying answer quality...")
+                    
+                    @retry_with_backoff(retries=1)
+                    def run_critic():
+                        critic_prompt = build_critic_prompt(message, full_response, context)
+                        return self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
+                    
+                    try:
+                        critic_resp = run_critic()
+                        if "APPROVED" in critic_resp.upper():
+                            print("[Agent] ✅ Critic Status: APPROVED")
+                        else:
+                            print(f"[Agent] ⚠️ Critic Suggestion: {critic_resp[:100]}...")
+                        execution_steps.append("Critic Review")
+                    except Exception:
+                        print("[Fallback] Critic review failed. Proceeding with unverified answer.")
             
-            else:
-                # Standard RAG flow (FACTUAL)
+            # ── Fallback Branch: Standard RAG flow ────────────────────────────
+            if intent == "FACTUAL":
                 print("[Step 4/5: LLM Generation] Generating standard RAG response...")
                 learned_examples = self.learner.get_relevant_corrections(message)
                 messages = [SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples))]
@@ -269,10 +309,16 @@ class CareerAgent:
 
                 full_response = ""
                 with get_openai_callback() as cb:
-                    for chunk in self._invoke_llm_stream(messages):
-                        full_response += chunk
-                        yield full_response
-                    tokens_used += cb.total_tokens
+                    # Final safety for streaming
+                    try:
+                        for chunk in self._invoke_llm_stream(messages):
+                            full_response += chunk
+                            yield full_response
+                        tokens_used += cb.total_tokens
+                    except Exception as e:
+                        print(f"[Critical Fallback] Final LLM Stream failed: {e}")
+                        yield "I apologize, but I am having trouble connecting to my service right now. Please try again in a few seconds."
+                        return
                 
                 execution_steps.append("LLM Generation")
                 print("[Step 5/5: Post-Processing] Finalizing response...")
@@ -285,7 +331,7 @@ class CareerAgent:
             status = "error"
             error_msg = str(exc)
             print(f"[Agent] Critical Error: {exc}")
-            yield f"I'm sorry, I encountered an error: {exc}"
+            yield "I'm sorry, I'm currently unable to process your request. This might be a temporary connection issue. Please try again shortly."
         finally:
             latency_ms = (time.time() - start_time) * 1000
             

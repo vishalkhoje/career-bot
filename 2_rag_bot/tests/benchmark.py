@@ -4,8 +4,11 @@ import json
 from datetime import datetime
 import statistics
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the directory containing 'src' to path (2_rag_bot folder)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
 from src.agent import CareerAgent
 from src.evaluation import EvaluationSystem
