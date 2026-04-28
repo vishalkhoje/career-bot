@@ -47,6 +47,13 @@ class EvaluationSystem:
                     metadata TEXT
                 )
             """)
+            
+            # Migration: Add correctness_score column if it doesn't exist
+            try:
+                conn.execute("ALTER TABLE evaluations ADD COLUMN correctness_score REAL DEFAULT 0.0")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
 
     def log_evaluation(self, 
                        query: str, 

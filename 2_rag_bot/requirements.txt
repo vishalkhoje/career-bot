@@ -12,3 +12,5 @@ rank_bm25
 flashrank
 tiktoken
 langsmith
+pandas
+plotly
