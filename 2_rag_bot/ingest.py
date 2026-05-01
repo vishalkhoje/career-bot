@@ -119,12 +119,11 @@ class DataPipeline:
                 all_docs.extend(loader.load())
 
         # 3. Chunking
-        # For resumes, we want to keep as much context as possible. 
-        # Instead of small chunks, we use a very large chunk size (30k) 
-        # which effectively keeps the entire resume together as one or two high-context chunks.
+        # Based on PDF analysis, the longest contiguous text block is ~2300 characters.
+        # We use a 2500 chunk size to ensure no project description is severed,
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=30000, 
-            chunk_overlap=0, # No overlap needed if it's all in one chunk
+            chunk_size=2500, 
+            chunk_overlap=300, 
             separators=["\n\n", "\n", ". ", " ", ""]
         )
         raw_chunks = []

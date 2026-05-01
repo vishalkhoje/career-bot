@@ -105,8 +105,8 @@ class CareerRetriever:
             else:
                 docs = self.vector_store.similarity_search(query, k=config.RETRIEVAL_K)
 
-            # Deterministic sorting (CRITICAL for cache hit consistency)
-            docs.sort(key=lambda d: d.page_content)
+            # Deterministic and chronological sorting by chunk_id
+            docs.sort(key=lambda d: d.metadata.get("chunk_id", 0))
             
             context = "\n\n".join(doc.page_content for doc in docs)
             return context
