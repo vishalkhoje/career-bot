@@ -136,14 +136,22 @@ def build_critic_prompt(query: str, response: str, context: str) -> str:
     Review the proposed answer to the user's query based on the provided context.
     
     User Query: {query}
-    Context: {context}
+    Context: {context[:2000]}
     Proposed Answer: {response}
     
-    Check for:
-    1. Hallucinations (info not in context)
-    2. Lack of grounding
-    3. Missing critical information
+    Tasks:
+    1. Check for Hallucinations (info not in context).
+    2. Check for Grounding (is it supported by context?).
+    3. Check for Relevance (does it answer the query?).
     
-    If the answer is perfect, return 'APPROVED'.
-    If not, provide a brief correction or instruction for improvement.
+    Return ONLY a JSON object:
+    {{
+      "status": "APPROVED" | "REJECTED",
+      "scores": {{
+        "groundedness": 0.0 to 1.0,
+        "relevance": 0.0 to 1.0,
+        "hallucination": 0.0 to 1.0
+      }},
+      "feedback": "If rejected, explain why and how to fix."
+    }}
     """

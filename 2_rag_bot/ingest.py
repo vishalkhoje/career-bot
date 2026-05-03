@@ -76,7 +76,7 @@ class DataPipeline:
         timestamp = datetime.now().isoformat()
         for chunk in chunks:
             chunk.metadata.update({
-                "embedding_version": config.EMBEDDING_VERSION,
+                "version": config.EMBEDDING_VERSION,
                 "ingestion_timestamp": timestamp
             })
 
@@ -151,8 +151,10 @@ class DataPipeline:
             print(f"[Pipeline] 🔄 FORCE RE-INDEX: Deleting index '{index_name}'...")
             if index_name in [idx.name for idx in self.pc.list_indexes()]:
                 self.pc.delete_index(index_name)
-                while index_name in [idx.name for idx in self.pc.list_indexes()]:
+                attempts = 0
+                while index_name in [idx.name for idx in self.pc.list_indexes()] and attempts < 60:
                     time.sleep(1)
+                    attempts += 1
 
         if index_name not in [idx.name for idx in self.pc.list_indexes()]:
             print(f"[Pipeline] Creating new index '{index_name}'...")
@@ -162,8 +164,10 @@ class DataPipeline:
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
-            while not self.pc.describe_index(index_name).status["ready"]:
+            attempts = 0
+            while not self.pc.describe_index(index_name).status["ready"] and attempts < 60:
                 time.sleep(1)
+                attempts += 1
 
         print(f"[Pipeline] Upserting {len(unique_chunks)} vectors to Pinecone...")
         PineconeVectorStore.from_documents(

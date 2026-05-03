@@ -21,7 +21,8 @@ OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
 OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 # Versioning for embeddings (increment this if you change the model or chunking logic)
 EMBEDDING_VERSION: str = "v1.2"
-
+# --- 🤖 Memory Settings ---
+MAX_MEMORY_TURNS = 5
 # ── Pinecone ──────────────────────────────────────────────────────────────────
 PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "career-bot")

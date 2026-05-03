@@ -93,17 +93,41 @@ class CareerRetriever:
             print(f"[Retriever] Failed to setup advanced pipeline: {exc}. Falling back to basic search.")
             self.ensemble_retriever = None
 
-    def retrieve(self, query: str) -> str:
+    def retrieve(self, query: str, metadata_filter: dict = None) -> str:
         """
         Retrieve context using the best available pipeline.
+        Includes a default metadata filter for the current EMBEDDING_VERSION.
         """
         try:
-            if config.USE_ADVANCED_RETRIEVAL and hasattr(self, 'compression_retriever'):
-                docs = self.compression_retriever.get_relevant_documents(query)
-            elif self.ensemble_retriever:
-                docs = self.ensemble_retriever.get_relevant_documents(query)
+            # 1. Prepare Filter
+            # Always enforce the version filter to avoid stale data.
+            search_filter = {"version": config.EMBEDDING_VERSION}
+            if metadata_filter:
+                search_filter.update(metadata_filter)
+
+            # 2. Quick confidence check on base vector store
+            docs_with_scores = self.vector_store.similarity_search_with_relevance_scores(
+                query, 
+                k=config.RETRIEVAL_K,
+                filter=search_filter
+            )
+            
+            top_score = docs_with_scores[0][1] if docs_with_scores else 0
+            
+            if top_score >= 0.9:
+                print(f"[Retriever] ⚡ High Confidence ({top_score:.2f}). Skipping reranking pipeline.")
+                docs = [doc for doc, score in docs_with_scores]
             else:
-                docs = self.vector_store.similarity_search(query, k=config.RETRIEVAL_K)
+                # 3. Proceed with Advanced Pipeline
+                if config.USE_ADVANCED_RETRIEVAL and hasattr(self, 'compression_retriever'):
+                    # Update filter in the underlying vector retriever
+                    self.compression_retriever.base_retriever.retrievers[0].search_kwargs["filter"] = search_filter
+                    docs = self.compression_retriever.get_relevant_documents(query)
+                elif self.ensemble_retriever:
+                    self.ensemble_retriever.retrievers[0].search_kwargs["filter"] = search_filter
+                    docs = self.ensemble_retriever.get_relevant_documents(query)
+                else:
+                    docs = [doc for doc, score in docs_with_scores]
 
             # Deterministic and chronological sorting by chunk_id
             docs.sort(key=lambda d: d.metadata.get("chunk_id", 0))

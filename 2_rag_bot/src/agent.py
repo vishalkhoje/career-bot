@@ -168,6 +168,15 @@ class CareerAgent:
                 # Gradio 4 format
                 chat_history.append(HumanMessage(content=item[0]))
                 chat_history.append(AIMessage(content=item[1]))
+        tokens_by_agent = {}
+        def _track_tokens(agent_name, callback):
+            tokens_by_agent[agent_name] = {
+                "prompt": callback.prompt_tokens,
+                "completion": callback.completion_tokens,
+                "total": callback.total_tokens,
+                "cost": callback.total_cost
+            }
+
         start_time = time.time()
         message = message.strip()
         tokens_used = 0
@@ -176,7 +185,7 @@ class CareerAgent:
         status = "success"
         execution_steps = []
         retrieved_contexts = []
-        eval_scores = {"hallucination": 0.0, "relevance": 0.0, "correctness": 0.0}
+        eval_scores = None # Will store scores from Critic if available
         latency_breakdown = {}
 
         from .utils import retry_with_backoff, safe_llm_call
@@ -213,7 +222,10 @@ class CareerAgent:
                 try:
                     from .prompt import build_intent_classifier_prompt
                     intent_prompt = build_intent_classifier_prompt(message)
-                    resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
+                    with get_openai_callback() as cb:
+                        resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
+                        _track_tokens("Intent Classifier", cb)
+                    print(f"[Tokens] Intent Classifier: {cb.total_tokens} tokens")
                     return "ANALYTICAL" if "ANALYTICAL" in resp.upper() else "FACTUAL"
                 except Exception as e:
                     print(f"[Fallback] Intent classification failed: {e}. Defaulting to FACTUAL.")
@@ -264,7 +276,11 @@ class CareerAgent:
                 @retry_with_backoff(retries=2)
                 def get_plan():
                     planner_prompt = build_planner_prompt(message, context)
-                    return self.non_streaming_llm.invoke([HumanMessage(content=planner_prompt)]).content
+                    with get_openai_callback() as cb:
+                        res = self.non_streaming_llm.invoke([HumanMessage(content=planner_prompt)]).content
+                        _track_tokens("Planner Agent", cb)
+                    print(f"[Tokens] Planner Agent: {cb.total_tokens} tokens")
+                    return res
                 
                 try:
                     plan = get_plan()
@@ -295,7 +311,9 @@ class CareerAgent:
                             for chunk in self._invoke_llm_stream(reasoning_messages):
                                 full_response += chunk
                                 yield full_response
+                            _track_tokens("Reasoning Agent", cb)
                             tokens_used += cb.total_tokens
+                        print(f"[Tokens] Reasoning Agent: {cb.total_tokens} tokens")
                         execution_steps.append("LLM Reasoning")
                     except Exception as e:
                         print(f"[Fallback] Reasoning stream failed: {e}. Falling back to simple RAG.")
@@ -312,14 +330,35 @@ class CareerAgent:
                     def run_critic():
                         # Only pass first 2000 chars of context to Critic to reduce prompt size
                         critic_prompt = build_critic_prompt(message, full_response, context[:2000])
-                        return self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
+                        with get_openai_callback() as cb:
+                            res = self.non_streaming_llm.invoke([HumanMessage(content=critic_prompt)]).content
+                            _track_tokens("Critic Agent", cb)
+                        print(f"[Tokens] Critic Agent: {cb.total_tokens} tokens")
+                        return res
                     
                     try:
                         critic_resp = run_critic()
-                        if "APPROVED" in critic_resp.upper():
-                            print("[Agent] ✅ Critic Status: APPROVED")
-                        else:
-                            print(f"[Agent] ⚠️ Critic Suggestion: {critic_resp[:100]}...")
+                        # Parse JSON response
+                        try:
+                            import json
+                            if "```json" in critic_resp:
+                                critic_resp = critic_resp.split("```json")[1].split("```")[0].strip()
+                            elif "```" in critic_resp:
+                                critic_resp = critic_resp.split("```")[1].split("```")[0].strip()
+                            
+                            critic_data = json.loads(critic_resp)
+                            eval_scores = critic_data.get("scores")
+                            c_status = critic_data.get("status", "APPROVED")
+                            
+                            if c_status == "APPROVED":
+                                print(f"[Agent] ✅ Critic Status: APPROVED (G={eval_scores.get('groundedness')})")
+                            else:
+                                print(f"[Agent] ⚠️ Critic Suggestion: {critic_data.get('feedback')[:100]}...")
+                        except Exception as parse_err:
+                            print(f"[Agent] Critic JSON parse error: {parse_err}")
+                            if "APPROVED" in critic_resp.upper():
+                                print("[Agent] ✅ Critic Status: APPROVED (Text fallback)")
+                        
                         execution_steps.append("Critic Review")
                     except Exception:
                         print("[Fallback] Critic review failed. Proceeding with unverified answer.")
@@ -342,11 +381,13 @@ class CareerAgent:
                         for chunk in self._invoke_llm_stream(messages):
                             full_response += chunk
                             yield full_response
+                        _track_tokens("Generation Agent", cb)
                         tokens_used += cb.total_tokens
                     except Exception as e:
                         print(f"[Critical Fallback] Final LLM Stream failed: {e}")
                         yield "I apologize, but I am having trouble connecting to my service right now. Please try again in a few seconds."
                         return
+                print(f"[Tokens] Generation Agent: {cb.total_tokens} tokens")
                 latency_breakdown['llm_generation_ms'] = (time.time() - step_start) * 1000
                 
                 execution_steps.append("LLM Generation")
@@ -370,6 +411,14 @@ class CareerAgent:
                 print(f"  {component}: {ms:.0f}ms")
             print(f"  TOTAL (user-facing): {latency_ms:.0f}ms")
             print(f"----------------------------")
+            
+            print(f"\n--- 💰 Token & Cost Summary ---")
+            total_cost = 0
+            for agent, stats in tokens_by_agent.items():
+                print(f"  {agent:18}: {stats['total']:4} tokens (${stats['cost']:.6f})")
+                total_cost += stats['cost']
+            print(f"  {'TOTAL':18}: {tokens_used:4} tokens (${total_cost:.6f})")
+            print(f"------------------------------")
 
             # ── Observability (log immediately, WITHOUT auto-eval) ────────────
             Observability.log_request(
@@ -386,34 +435,41 @@ class CareerAgent:
 
             # ── Background Evaluation (ASYNC — does NOT block the user) ───────
             if not cache_hit and status == "success":
-                def _background_eval(q, resp, ctx, lat, tok, intent_val):
+                def _background_eval(q, resp, ctx, lat, tok, intent_val, existing_scores):
                     try:
                         from .evaluation import EvaluationSystem
                         eval_sys = EvaluationSystem()
-                        scores = eval_sys.auto_evaluate(q, resp, ctx)
+                        
+                        if existing_scores:
+                            print("[Eval] ⏭ Skipping Auto-Eval LLM call (using Critic scores)")
+                            scores = existing_scores
+                        else:
+                            # Re-run auto-eval if critic didn't run
+                            scores = eval_sys.auto_evaluate(q, resp, ctx)
+                        
                         eval_id = eval_sys.log_evaluation(
                             query=q,
                             response=resp,
                             latency_ms=lat,
                             tokens=tok,
                             cache_hit=False,
-                            hallucination_score=scores["hallucination"],
-                            relevance_score=scores["relevance"],
+                            hallucination_score=scores.get("hallucination", 0.0),
+                            relevance_score=scores.get("relevance", 0.0),
                             correctness_score=scores.get("correctness", 0.0),
                             groundedness_score=scores.get("groundedness", 0.0),
                             metadata={"intent": intent_val}
                         )
-                        print(f"[Eval] ✅ Background eval complete: ID={eval_id} | G={scores.get('groundedness',0):.2f} | R={scores['relevance']:.2f} | H={scores['hallucination']:.2f}")
+                        print(f"[Eval] ✅ Background log complete: ID={eval_id} | G={scores.get('groundedness',0):.2f} | R={scores.get('relevance',0):.2f}")
                     except Exception as e:
                         print(f"[Eval] Background eval failed: {e}")
                 
                 thread = threading.Thread(
                     target=_background_eval,
-                    args=(message, full_response, context, latency_ms, tokens_used, intent),
+                    args=(message, full_response, context, latency_ms, tokens_used, intent, eval_scores),
                     daemon=True
                 )
                 thread.start()
-                print("[Eval] 🔄 Auto-evaluation started in background thread.")
+                print("[Eval] 🔄 Background evaluation task queued.")
 
     # ── Private helpers ─────────────────────────────────────────────────────────
 
@@ -422,7 +478,11 @@ class CareerAgent:
         Invoke the LLM with streaming support, handling any tool calls.
         """
         done = False
-        while not done:
+        iterations = 0
+        max_iterations = 3
+        
+        while not done and iterations < max_iterations:
+            iterations += 1
             content_yielded = ""
             full_message = None
             
@@ -509,8 +569,14 @@ class CareerAgent:
         Returns:
             A list of ``HumanMessage`` / ``AIMessage`` objects.
         """
+        # Optimization: Only process the last N turns to keep context window small
+        # In Gradio 5 (dicts), 1 turn = 2 messages. In Gradio 4 (tuples), 1 turn = 1 tuple.
+        is_dict_format = len(history) > 0 and isinstance(history[0], dict)
+        slice_size = config.MAX_MEMORY_TURNS * 2 if is_dict_format else config.MAX_MEMORY_TURNS
+        relevant_history = history[-slice_size:]
+        
         messages = []
-        for item in history:
+        for item in relevant_history:
             if isinstance(item, dict):
                 role = item.get("role", "")
                 content = item.get("content", "")
