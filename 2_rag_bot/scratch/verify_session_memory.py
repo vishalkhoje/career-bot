@@ -4,7 +4,7 @@ import os
 # Add 2_rag_bot to path
 sys.path.append(os.path.abspath("2_rag_bot"))
 
-from src.agent import CareerAgent
+from src import CareerAgent
 
 def verify_memory():
     print("--- 🧠 Session Memory Verification ---")

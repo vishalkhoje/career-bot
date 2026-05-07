@@ -12,7 +12,7 @@ import time
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent
+from src import CareerAgent
 
 def test_observability():
     print("=" * 60)

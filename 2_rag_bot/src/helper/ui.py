@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import gradio as gr
 
-from . import config
-from .agent import CareerAgent
+from ..core import config
+from ..agents.career_agent import CareerAgent
 
 
 def build_ui(agent: CareerAgent) -> gr.Blocks:
@@ -56,7 +56,7 @@ def build_ui(agent: CareerAgent) -> gr.Blocks:
         )
         
         def handle_feedback(data: gr.LikeData):
-            from .evaluation import EvaluationSystem
+            from ..database.evaluation import EvaluationSystem
             import threading
             eval_sys = EvaluationSystem()
             

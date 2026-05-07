@@ -14,8 +14,8 @@ from typing import List, Dict
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent
-from src.evaluation import EvaluationSystem
+from src import CareerAgent
+from src import EvaluationSystem
 
 def run_eval():
     print("=" * 60)

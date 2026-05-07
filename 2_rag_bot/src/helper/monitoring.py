@@ -43,7 +43,8 @@ class Observability:
         """
         Check for conditions that should trigger an alert.
         """
-        latency_threshold = 15000 # 15 seconds
+        from ..core import config
+        latency_threshold = config.LATENCY_ALERT_THRESHOLD
         hallucination_threshold = 0.7
         
         alerts = []
@@ -69,7 +70,9 @@ class Observability:
         tools_called: int = 0,
         steps: Optional[List[str]] = None,
         retrieved_docs: Optional[List[str]] = None,
-        hallucination_score: float = 0.0
+        hallucination_score: float = 0.0,
+        iterations: int = 0,
+        request_id: Optional[str] = None
     ):
         """
         Record a complete chat request event with deep observability.
@@ -88,7 +91,9 @@ class Observability:
             "tools_called": tools_called,
             "steps": steps or [],
             "retrieved_docs_preview": [d[:100] for d in (retrieved_docs or [])],
-            "hallucination_score": hallucination_score
+            "hallucination_score": hallucination_score,
+            "iterations": iterations,
+            "request_id": request_id
         }
         
         # Log as structured JSON
@@ -112,7 +117,7 @@ class Observability:
         print("-" * 30)
 
     @staticmethod
-    def log_tool_execution(tool_name: str, duration_ms: float, success: bool, error: Optional[str] = None):
+    def log_tool_execution(tool_name: str, duration_ms: float, success: bool, error: Optional[str] = None, request_id: Optional[str] = None):
         """
         Specific tracking for tool failures and performance.
         """
@@ -122,7 +127,8 @@ class Observability:
             "tool_name": tool_name,
             "duration_ms": round(duration_ms, 2),
             "success": success,
-            "error": error
+            "error": error,
+            "request_id": request_id
         }
         metrics_logger.info(json.dumps(event))
         

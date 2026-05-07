@@ -8,8 +8,8 @@ import time
 
 sys.path.append(os.path.abspath("2_rag_bot"))
 
-from src.agent import CareerAgent
-from src.cache import ResponseCache
+from src import CareerAgent
+from src import ResponseCache
 from src import config
 
 def run_latency_test():

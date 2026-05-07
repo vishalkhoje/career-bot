@@ -5,7 +5,7 @@ from datetime import datetime
 # Add 2_rag_bot to path
 sys.path.append(os.path.abspath("2_rag_bot"))
 
-from src.monitoring import Observability
+from src import Observability
 
 def trigger_test_alerts():
     print("--- 🚨 Alert System Verification Test ---")

@@ -15,7 +15,7 @@ import time
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent  # noqa: E402
+from src import CareerAgent, ResponseCache, config
 
 QUERY = "Tell me about your career in 3 sentences."
 
@@ -25,8 +25,6 @@ def test_streaming() -> None:
     print("=" * 50)
 
     # Clear cache to force a fresh LLM call (streaming doesn't happen on cache hit, it's instant)
-    from src.cache import ResponseCache
-    from src import config
     ResponseCache(db_path=config.CACHE_DB_PATH).clear()
 
     agent = CareerAgent()

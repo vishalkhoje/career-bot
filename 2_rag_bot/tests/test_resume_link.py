@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent
+from src import CareerAgent
 Me = CareerAgent
 
 def test_resume_retrieval():

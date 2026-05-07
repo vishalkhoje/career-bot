@@ -7,8 +7,8 @@ import time
 # Add 2_rag_bot to path
 sys.path.append(os.path.abspath("2_rag_bot"))
 
-from src.evaluation import EvaluationSystem
-from src.agent import CareerAgent
+from src import EvaluationSystem
+from src import CareerAgent
 
 def test_feedback_loop():
     print("--- 🔄 Feedback Loop Verification Test ---")

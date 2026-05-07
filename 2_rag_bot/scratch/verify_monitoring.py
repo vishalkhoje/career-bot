@@ -5,8 +5,8 @@ from datetime import datetime
 # Add 2_rag_bot to path
 sys.path.append(os.path.abspath("2_rag_bot"))
 
-from src.monitoring import Observability
-from src.evaluation import EvaluationSystem
+from src import Observability
+from src import EvaluationSystem
 
 def test_monitoring_and_eval():
     print("--- Starting Verification Test ---")

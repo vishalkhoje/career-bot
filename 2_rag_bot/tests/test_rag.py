@@ -5,16 +5,19 @@ from dotenv import load_dotenv
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent
-Me = CareerAgent
+from src import CareerAgent
 
 def test_rag_bot():
     print("Testing RAG Bot...")
     try:
-        me = Me()
-        response = me.chat("What are your key skills?", [])
-        print(f"Response: {response[:100]}...")
-        if len(response) > 0:
+        me = CareerAgent()
+        # Consume the generator
+        full_response = ""
+        for chunk in me.chat("What are your key skills?", []):
+            full_response = chunk
+        
+        print(f"Response: {full_response[:100]}...")
+        if len(full_response) > 0:
             print("✅ RAG Bot logic is working!")
         else:
             print("❌ RAG Bot returned empty response.")

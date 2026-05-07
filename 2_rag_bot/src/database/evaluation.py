@@ -17,7 +17,7 @@ from typing import Dict, Any, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
-from . import config
+from ..core import config
 
 class EvaluationSystem:
     def __init__(self, db_path: str = "evaluations.db"):

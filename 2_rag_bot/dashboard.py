@@ -71,7 +71,7 @@ def get_dashboard_data(num_queries=10):
     """Aggregate data for the dashboard components, filtered by num_queries."""
     # Ensure database is up to date
     try:
-        from src.evaluation import EvaluationSystem
+        from src import EvaluationSystem
         EvaluationSystem(db_path=EVAL_DB)
     except ImportError:
         pass

@@ -16,7 +16,7 @@ import sys
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agent import CareerAgent  # noqa: E402
+from src import CareerAgent, ResponseCache, config
 
 RESUME_QUERY = "Can you share your resume link?"
 PASS = "✅ PASS"
@@ -29,8 +29,6 @@ def test_cache_and_resume() -> None:
     print("=" * 50)
 
     # Clear cache so we always start from a known state
-    from src.cache import ResponseCache
-    from src import config
     ResponseCache(db_path=config.CACHE_DB_PATH).clear()
 
     agent = CareerAgent()

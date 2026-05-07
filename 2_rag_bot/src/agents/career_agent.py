@@ -21,12 +21,12 @@ Design goals:
 
 from __future__ import annotations
 
+import os
 import json
 import time
-import os
 import threading
-from typing import Union
-
+import uuid
+from typing import List, Dict, Any, Optional, Union, Generator
 from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.messages import (
     AIMessage,
@@ -36,11 +36,11 @@ from langchain_core.messages import (
 )
 from langchain_openai import ChatOpenAI
 
-from . import config
-from .cache import ResponseCache
-from .prompt import build_system_prompt
-from .retriever import CareerRetriever
-from .tools import TOOL_MAP, TOOL_SCHEMAS
+from ..core import config
+from ..database.cache import ResponseCache
+from .prompts import build_system_prompt
+from ..core.retriever import CareerRetriever
+from ..tools.registry import TOOL_MAP, TOOL_SCHEMAS
 
 # Conversation history item can be dict (Gradio 5) or 2-tuple (Gradio 4)
 _HistoryItem = Union[dict, tuple]
@@ -146,8 +146,8 @@ class CareerAgent:
         """
         Process a user message using a Multi-Agent Reasoning Workflow.
         """
-        from .monitoring import Observability
-        from .prompt import (
+        from ..helper.monitoring import Observability
+        from .prompts import (
             build_intent_classifier_prompt,
             build_planner_prompt,
             build_critic_prompt,
@@ -178,6 +178,7 @@ class CareerAgent:
             }
 
         start_time = time.time()
+        request_id = str(uuid.uuid4())
         message = message.strip()
         tokens_used = 0
         cache_hit = False
@@ -187,8 +188,10 @@ class CareerAgent:
         retrieved_contexts = []
         eval_scores = None # Will store scores from Critic if available
         latency_breakdown = {}
+        tool_calls_counts = []
+        iterations_counts = []
 
-        from .utils import retry_with_backoff, safe_llm_call
+        from ..helper.utils import retry_with_backoff, safe_llm_call
 
         try:
             # ── Immediate Feedback ─────────────────────────────────────────────
@@ -220,7 +223,7 @@ class CareerAgent:
             def _classify_intent():
                 """LLM-based intent classification."""
                 try:
-                    from .prompt import build_intent_classifier_prompt
+                    from .prompts import build_intent_classifier_prompt
                     intent_prompt = build_intent_classifier_prompt(message)
                     with get_openai_callback() as cb:
                         resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
@@ -308,7 +311,7 @@ class CareerAgent:
                     step_start = time.time()
                     try:
                         with get_openai_callback() as cb:
-                            for chunk in self._invoke_llm_stream(reasoning_messages):
+                            for chunk in self._invoke_llm_stream(reasoning_messages, tool_calls_sink=tool_calls_counts, iterations_sink=iterations_counts, request_id=request_id):
                                 full_response += chunk
                                 yield full_response
                             _track_tokens("Reasoning Agent", cb)
@@ -378,7 +381,7 @@ class CareerAgent:
                 full_response = ""
                 with get_openai_callback() as cb:
                     try:
-                        for chunk in self._invoke_llm_stream(messages):
+                        for chunk in self._invoke_llm_stream(messages, tool_calls_sink=tool_calls_counts, iterations_sink=iterations_counts, request_id=request_id):
                             full_response += chunk
                             yield full_response
                         _track_tokens("Generation Agent", cb)
@@ -420,7 +423,12 @@ class CareerAgent:
             print(f"  {'TOTAL':18}: {tokens_used:4} tokens (${total_cost:.6f})")
             print(f"------------------------------")
 
+            if total_cost > config.COST_ALERT_THRESHOLD:
+                print(f"\n[ALERT] 💰 HIGH COST DETECTED: This request cost ${total_cost:.4f} (Threshold: ${config.COST_ALERT_THRESHOLD})")
+                print(f"Consider reducing context size or disabling the Critic Agent for simple queries.")
+
             # ── Observability (log immediately, WITHOUT auto-eval) ────────────
+            total_tool_calls = sum(tool_calls_counts)
             Observability.log_request(
                 query=message,
                 latency_ms=latency_ms,
@@ -430,14 +438,17 @@ class CareerAgent:
                 cache_hit=cache_hit,
                 steps=execution_steps,
                 retrieved_docs=retrieved_contexts,
-                hallucination_score=0.0
+                tools_called=total_tool_calls,
+                hallucination_score=0.0,
+                iterations=sum(iterations_counts),
+                request_id=request_id
             )
 
             # ── Background Evaluation (ASYNC — does NOT block the user) ───────
             if not cache_hit and status == "success":
                 def _background_eval(q, resp, ctx, lat, tok, intent_val, existing_scores):
                     try:
-                        from .evaluation import EvaluationSystem
+                        from ..database.evaluation import EvaluationSystem
                         eval_sys = EvaluationSystem()
                         
                         if existing_scores:
@@ -473,9 +484,13 @@ class CareerAgent:
 
     # ── Private helpers ─────────────────────────────────────────────────────────
 
-    def _invoke_llm_stream(self, messages: list):
+    def _invoke_llm_stream(self, messages: list, tool_calls_sink: list = None, iterations_sink: list = None, request_id: str = None):
         """
         Invoke the LLM with streaming support, handling any tool calls.
+        
+        Args:
+            messages: List of LangChain messages.
+            tool_calls_sink: Optional list to append tool call counts to.
         """
         done = False
         iterations = 0
@@ -483,6 +498,9 @@ class CareerAgent:
         
         while not done and iterations < max_iterations:
             iterations += 1
+            if iterations_sink is not None:
+                iterations_sink.append(1)
+            
             content_yielded = ""
             full_message = None
             
@@ -500,16 +518,21 @@ class CareerAgent:
             if full_message and full_message.tool_calls:
                 # Append AI message so the LLM sees its own tool call
                 messages.append(full_message)
-                tool_results = self._dispatch_tool_calls(full_message.tool_calls)
+                if tool_calls_sink is not None:
+                    # Each iteration that has tool_calls counts as 1 "tool call event"
+                    # or we can count the actual number of tools in full_message.tool_calls
+                    tool_calls_sink.append(len(full_message.tool_calls))
+                
+                tool_results = self._dispatch_tool_calls(full_message.tool_calls, request_id=request_id)
                 messages.extend(tool_results)
             else:
                 done = True
 
-    def _dispatch_tool_calls(self, tool_calls: list) -> list[ToolMessage]:
+    def _dispatch_tool_calls(self, tool_calls: list, request_id: str = None) -> list[ToolMessage]:
         """
         Execute each requested tool and return ToolMessage results.
         """
-        from .monitoring import Observability
+        from ..helper.monitoring import Observability
         results: list[ToolMessage] = []
 
         for call in tool_calls:
@@ -543,7 +566,8 @@ class CareerAgent:
                 tool_name=tool_name,
                 duration_ms=tool_duration,
                 success=success,
-                error=error_msg
+                error=error_msg,
+                request_id=request_id
             )
 
             results.append(

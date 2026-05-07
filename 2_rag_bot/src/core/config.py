@@ -11,8 +11,8 @@ in business-logic files.
 import os
 from dotenv import load_dotenv
 
-# Load .env file from the parent directory (2_rag_bot/)
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Load .env file from the project root (2_rag_bot/)
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(dotenv_path=os.path.join(_BASE_DIR, ".env"), override=True)
 
 # ── OpenAI ────────────────────────────────────────────────────────────────────
@@ -21,8 +21,10 @@ OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
 OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 # Versioning for embeddings (increment this if you change the model or chunking logic)
 EMBEDDING_VERSION: str = "v1.2"
-# --- 🤖 Memory Settings ---
+# --- 💰 Cost & Token Settings ---
 MAX_MEMORY_TURNS = 5
+COST_ALERT_THRESHOLD = 0.01  # Alert if a single request exceeds $0.01
+LATENCY_ALERT_THRESHOLD = 5000 # Alert if response takes > 5 seconds
 # ── Pinecone ──────────────────────────────────────────────────────────────────
 PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "career-bot")

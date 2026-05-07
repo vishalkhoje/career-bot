@@ -11,7 +11,7 @@ import time
 # Add the project directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.retriever import CareerRetriever
+from src import CareerRetriever
 from src import config
 
 def test_advanced_retrieval():

@@ -12,7 +12,7 @@ Keeping the prompt in its own module means it can be:
 from __future__ import annotations
 from typing import Optional
 
-from . import config
+from ..core import config
 
 
 def build_system_prompt(context: str, name: str = config.BOT_NAME, learned_examples: Optional[str] = None) -> str:

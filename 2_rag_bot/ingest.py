@@ -15,8 +15,8 @@ from pinecone import Pinecone, ServerlessSpec
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from src.cache import ResponseCache
-from src import config
+from src.database.cache import ResponseCache
+from src.core import config
 
 # Load env vars
 load_dotenv(override=True)

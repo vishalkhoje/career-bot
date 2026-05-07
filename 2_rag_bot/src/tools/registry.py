@@ -16,7 +16,7 @@ The module also exposes:
 from __future__ import annotations
 
 import requests
-from . import config
+from ..core import config
 
 
 # ── Pushover notification helper ───────────────────────────────────────────────

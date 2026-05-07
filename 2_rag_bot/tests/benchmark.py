@@ -10,8 +10,8 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from src.agent import CareerAgent
-from src.evaluation import EvaluationSystem
+from src import CareerAgent
+from src import EvaluationSystem
 from src import config
 
 def run_benchmark():
@@ -49,7 +49,7 @@ def run_benchmark():
         # 2. Get Context (Hack to get context used by agent)
         # In a real system, the agent would return context. 
         # Here we'll manually retrieve for the evaluation step to ensure it's fair.
-        from src.retriever import CareerRetriever
+        from src import CareerRetriever
         retriever = CareerRetriever()
         context = retriever.retrieve(query)
 
