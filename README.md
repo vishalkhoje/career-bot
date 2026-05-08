@@ -21,6 +21,18 @@ An advanced implementation using **Retrieval-Augmented Generation (RAG)**, Multi
 
 ---
 
+## 📐 System Design & Workflow
+
+### Stage 2: Agentic Workflow
+The bot uses a multi-agent orchestration pattern to handle complex queries, moving from simple intent classification to strategic planning and execution.
+![Career Bot Workflow](./2_rag_bot/career_bot_workflow.png)
+
+### Stage 3: Full System Architecture (RAG)
+The production version implements a robust RAG pipeline with hybrid search, re-ranking, and deep observability.
+![Career Bot System Design](./2_rag_bot/career-bot-system-design.png)
+
+---
+
 ## 📋 Minimum System Requirements
 
 -   **OS**: macOS, Linux, or Windows (via WSL2).
@@ -55,6 +67,23 @@ pip install -r 1_simple_bot/requirements.txt
 pip install -r 2_rag_bot/requirements.txt
 ```
 
+### ⚡ Fast Setup with `uv` (Recommended)
+If you have [uv](https://github.com/astral-sh/uv) installed, you can set up the environment and run the project significantly faster:
+
+```bash
+# 1. Create venv and install dependencies
+uv venv
+source .venv/bin/activate
+uv pip install -r 2_rag_bot/requirements.txt
+
+# 2. Run the ingest pipeline
+cd 2_rag_bot
+uv run ingest.py
+
+# 3. Start the chat server
+uv run app-rag.py
+```
+
 ### 4. Configuration
 Create a `.env` file in the bot's directory (e.g., `2_rag_bot/.env`):
 ```env
@@ -79,13 +108,13 @@ LANGSMITH_API_KEY=your_langsmith_key
 
 ### Option A: The Production RAG Bot (Recommended)
 Navigate to `2_rag_bot/`:
-1.  **Ingest Data**: `python3 ingest.py`
-2.  **Start Server**: `python3 app-rag.py` (Port 7860)
-3.  **Start Dashboard**: `python3 dashboard.py` (Port 7861)
+1.  **Ingest Data**: `python3 ingest.py` (or `uv run ingest.py`)
+2.  **Start Server**: `python3 app-rag.py` (or `uv run app-rag.py`) (Port 7860)
+3.  **Start Dashboard**: `python3 dashboard.py` (or `uv run dashboard.py`) (Port 7861)
 
 ### Option B: The Lightweight Simple Bot
 Navigate to `1_simple_bot/`:
-1.  **Start Server**: `python3 app.py` (Port 7860)
+1.  **Start Server**: `python3 app.py` (or `uv run app.py`) (Port 7860)
 
 ---
 

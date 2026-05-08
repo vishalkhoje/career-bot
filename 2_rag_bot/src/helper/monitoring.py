@@ -13,13 +13,19 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+from logging.handlers import TimedRotatingFileHandler
 
 # Setup a dedicated logger for production metrics
 metrics_logger = logging.getLogger("career_bot_metrics")
 metrics_logger.setLevel(logging.INFO)
 
-# File handler for structured JSON logs (good for Datadog/ELK)
-fh = logging.FileHandler("career_bot_metrics.jsonl")
+# File handler for structured JSON logs with daily rotation (cleans up old logs)
+fh = TimedRotatingFileHandler(
+    "career_bot_metrics.jsonl",
+    when="midnight",
+    interval=1,
+    backupCount=7  # Keep 7 days of history, older logs are automatically deleted
+)
 metrics_logger.addHandler(fh)
 
 class Observability:

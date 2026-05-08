@@ -66,6 +66,13 @@ Organisation: Personal Project
 - Focused on improving engagement and accessibility by transforming static profile information into an interactive experience.
 Skills used: Large Language Models (LLM), AI Agents, System Design, Architecture, Python, Testing, RAG, Pinecone, Gradio, Azure OpenAI, LangChain, OpenAI, Streaming 
 
+AI System Architecture & Production Experience:
+- Owned the retrieval layer for a customer-facing AI agent handling 20,000+ daily queries, including architecture design, cost - latency optimization, and incident management.
+- Improved retrieval precision by 31pp by implementing hybrid search (vector + BM25), addressing 18% loss on long-tail queries with only +22ms latency overhead.
+- Designed and deployed a guardrail system after a prompt injection incident that misrouted 0.4% of production queries to unintended tool endpoints, implementing policy enforcement at the I/O boundary to prevent recurrence.
+- Architecting an AI-driven QA automation platform to autonomously generate, execute, and report test cases end-to-end - targeting elimination of manual QA effort and full SDLC test coverage. 
+- Delivered an AI-powered insights platform (Azure OpenAI, RAG, LangChain) automating 100+ reports/day. Reduced analyst effort by 70%+, accelerating enterprise insights and decision-making.
+
 AI LEARNING & CREDENTIALS
 •	AWS Certified AI Practitioner AIF-C01 - Completion Badge (2024)
 •	AI Agents Fundamentals – (Hugging Face)
