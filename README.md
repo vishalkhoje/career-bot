@@ -1,6 +1,6 @@
 # 🚀 Career Conversation AI Bot
 
-A production-grade career assistant featuring both a lightweight context-passing version and a sophisticated Multi-Agent RAG system.
+g
 
 ---
 
@@ -11,6 +11,8 @@ This was the first phase of the project. It reads the entire LinkedIn PDF and su
 - **Main Script**: `app.py`
 - **Key Features**: Lightweight, no database required, uses Azure OpenAI.
 - **Best For**: Quick testing and small context windows.
+
+![Simple Bot Flow](./images/flow_diagram.png)
 
 ### 📂 [2_rag_bot](./2_rag_bot) (The Production Version)
 An advanced implementation using **Retrieval-Augmented Generation (RAG)**, Multi-Agent orchestration, and deep observability.
@@ -25,11 +27,11 @@ An advanced implementation using **Retrieval-Augmented Generation (RAG)**, Multi
 
 ### Stage 2: Agentic Workflow
 The bot uses a multi-agent orchestration pattern to handle complex queries, moving from simple intent classification to strategic planning and execution.
-![Career Bot Workflow](./2_rag_bot/career_bot_workflow.png)
+![Career Bot Workflow](./images/career_bot_workflow.png)
 
 ### Stage 3: Full System Architecture (RAG)
 The production version implements a robust RAG pipeline with hybrid search, re-ranking, and deep observability.
-![Career Bot System Design](./2_rag_bot/career-bot-system-design.png)
+![Career Bot System Design](./images/career-bot-system-design.png)
 
 ---
 
@@ -125,6 +127,9 @@ The production version implements **Deep Observability**:
 -   **Latency Breakdown**: Tracks time spent in Intent vs. Retrieval vs. Generation.
 -   **Cost Tracking**: Real-time USD cost estimation per request.
 -   **Monitoring**: Structured JSON logs in `career_bot_metrics.jsonl`.
+
+### Analytics Dashboard
+![Monitoring Dashboard](./images/monitoring-dashboard-image.png)
 
 ---
 
