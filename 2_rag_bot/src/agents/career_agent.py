@@ -202,8 +202,7 @@ class CareerAgent:
 
             # ── Step 1: Cache Check ────────────────────────────────────────────
             print(f"\n[Step 1/5: Cache Check] query='{message[:50]}...'")
-            cache_key = self.cache.make_key(message)
-            cached = self.cache.get(cache_key)
+            cached, query_emb = self.cache.get_semantic(message, threshold=0.65)
             if cached:
                 print("[Cache] ⚡ HIT — serving from SQLite")
                 cache_hit = True
@@ -398,7 +397,7 @@ class CareerAgent:
 
             # ── Final: Cache Storage ──────────────────────────────────────────
             if full_response:
-                self.cache.set(cache_key, full_response)
+                self.cache.set_semantic(message, full_response, query_emb)
 
         except Exception as exc:
             status = "error"
