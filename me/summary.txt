@@ -42,15 +42,55 @@ https://huggingface.co/datasets/agents-course/certificates/resolve/main/certific
 👥 Led and mentored 10+ engineers, improving delivery efficiency and engineering quality
 
 KEY PROJECTS
+•	AI-Powered Customer Support Bot Platform
+	Designed and developed an enterprise-grade AI Customer Support Bot using Agentic RAG architecture with memory, tool calling, evaluation pipelines, monitoring, and human escalation workflows.
+
+	Key Contributions:
+		- Built orchestrator agents for intent detection, workflow routing, and multi-agent execution.
+		- Developed Retrieval-Augmented Generation (RAG) pipelines using vector search + BM25 hybrid retrieval.
+		- Implemented document ingestion pipeline including chunking, embeddings, metadata enrichment, and indexing.
+		- Integrated enterprise tools and APIs using MCP (Model Context Protocol) architecture.
+		- Built AI response generation workflows using GPT/OpenAI models with grounded context generation.
+		- Implemented hallucination detection, validation agents, confidence scoring, and safety guardrails.
+		- Designed conversation memory and user profile memory for personalized responses.
+		- Built human escalation workflows for low-confidence and policy-sensitive queries.
+		- Developed feedback loop and evaluation systems for continuous AI improvement.
+		- Implemented monitoring, tracing, logging, and alerting using Prometheus, Grafana and email alert.
+		- Worked on Kubernetes-based scalable deployment, Redis caching, async workers, and CI/CD pipelines.
+
 •	AI-Powered Career Conversation Chatbot   https://huggingface.co/spaces/vishalkhoje/career_conversation
 	    - Built conversational AI system enabling recruiters to interact with candidate profiles 
 	    - Integrated LLM-based response generation for intelligent querying
+	    - Implemented RAG + Vector Search for hybrid retrieval with metadata filtering.
+	    - Used Pinecone for vector storage and Redis for caching.
+	    - Built end-to-end application with interactive chat interface using Gradio.
+	    - Designed agentic workflows for query understanding, retrieval, and response generation.
+	    - Implemented memory and context management for conversational continuity.
+	    - Integrated with LLM providers including OpenAI and Azure OpenAI.
+	    - Focused on evaluation, guardrails, and safety in the AI-human interaction.
+
 •	AI QA Automation Platform (In Development)
 	    - Designing AI-driven workflows to automate the full test lifecycle
 	    - Targeting elimination of manual QA effort and end-to-end SDLC coverage
 
+Project Name: AI-Powered Customer Support Bot Platform
+Duration: April 2026 to May 2026
+Organisation Mathco
+	- Built orchestrator agents for intent detection, workflow routing, and multi-agent execution.
+	- Developed Retrieval-Augmented Generation (RAG) pipelines using vector search + BM25 hybrid retrieval.
+	- Implemented document ingestion pipeline including chunking, embeddings, metadata enrichment, and indexing.
+	- Integrated enterprise tools and APIs using MCP (Model Context Protocol) architecture.
+	- Built AI response generation workflows using GPT/OpenAI models with grounded context generation.
+	- Implemented hallucination detection, validation agents, confidence scoring, and safety guardrails.
+	- Designed conversation memory and user profile memory for personalized responses.
+	- Built human escalation workflows for low-confidence and policy-sensitive queries.
+	- Developed feedback loop and evaluation systems for continuous AI improvement.
+	- Implemented monitoring, tracing, logging, and alerting using Prometheus, Grafana and email alert.
+	- Worked on Kubernetes-based scalable deployment, Redis caching, async workers, and CI/CD pipelines.
+Skills: Large Language Models (LLM), AI Agents, AI Workflow design, Testing, Architecture, Python, AI agent Orchestration, RAG, Pinecone, Redis, Kubernetes, Docker, Kafka, React, Python, PostgreSQL, Node.js, JavaScript
+
 Project Name : AI-Driven QA Automation Platform
-Duration: March 2026 to Present
+Duration: March 2026 to April 2026
 Organisation MathCo
 - Architected and initiated an AI-powered QA automation platform to automate the complete testing lifecycle, including test planning, generation, execution, and reporting.
 - Defined workflow architecture, toolchain (including Playwright), and agent-based automation strategy to enable autonomous test case creation and execution at scale.

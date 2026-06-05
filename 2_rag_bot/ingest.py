@@ -87,7 +87,7 @@ class DataPipeline:
         print(f"\n{'='*50}\nCareer Bot Data Pipeline\n{'='*50}")
         
         # 1. Validation
-        source_files = ["me/linkedin.pdf", "me/summary.txt"]
+        source_files = ["me/linkedin.pdf", "me/resume.pdf", "me/summary.txt"]
         valid_files = self.validate_source_files(source_files)
         if not valid_files:
             print("[Pipeline] ❌ Error: No valid source files found. Aborting.")
@@ -168,6 +168,13 @@ class DataPipeline:
             while not self.pc.describe_index(index_name).status["ready"] and attempts < 60:
                 time.sleep(1)
                 attempts += 1
+        else:
+            print(f"[Pipeline] Cleaning existing index '{index_name}' vectors...")
+            try:
+                index = self.pc.Index(index_name)
+                index.delete(delete_all=True)
+            except Exception as e:
+                print(f"[Pipeline] Warning: Could not clear index vectors: {e}")
 
         print(f"[Pipeline] Upserting {len(unique_chunks)} vectors to Pinecone...")
         PineconeVectorStore.from_documents(
