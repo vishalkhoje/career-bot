@@ -49,10 +49,9 @@ def build_ui(agent: CareerAgent) -> gr.Blocks:
         print("[UI] Running in DEVELOPMENT mode (Gradio 4 compatible).")
 
     with gr.Blocks(title="Vishal's AI") as demo:
-        # Force type="messages" for Gradio 5+ compatibility and better history handling
+        # Force type="messages" for Gradio 5+ compatibility (handled inside chat_kwargs) and better history handling
         interface = gr.ChatInterface(
-            **chat_kwargs,
-            type="messages"
+            **chat_kwargs
         )
         
         def handle_feedback(data: gr.LikeData):

@@ -22,7 +22,8 @@ def run_eval():
     print("Career Bot Offline Evaluation")
     print("=" * 60)
 
-    dataset_path = "2_rag_bot/tests/eval_dataset.json"
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(tests_dir, "eval_dataset.json")
     if not os.path.exists(dataset_path):
         print(f"Error: Dataset not found at {dataset_path}")
         return
@@ -37,7 +38,7 @@ def run_eval():
     
     for i, item in enumerate(dataset):
         query = item["query"]
-        expected = item["expected"]
+        expected = item.get("expected_answer", item.get("expected", ""))
         
         print(f"\n[{i+1}/{len(dataset)}] Query: {query}")
         
@@ -60,18 +61,23 @@ def run_eval():
         ACTUAL RESPONSE: {response}
         
         Score from 0.0 to 1.0 for:
-        1. Correctness: Is the info factually accurate compared to expected?
-        2. Groundedness: Does it stay within the bounds of what was asked?
-        3. Completeness: Does it answer all parts of the query?
+        1. correctness: Is the info factually accurate compared to expected?
+        2. groundedness: Does it stay within the bounds of what was asked?
+        3. relevance: Does it directly address the query?
+        4. hallucination: Does it contain unsupported info not in expected?
         
-        Format: JSON only. Example: {{"correctness": 0.9, "groundedness": 1.0, "completeness": 0.8}}
+        Format: JSON only. Example: {{"correctness": 0.9, "groundedness": 1.0, "relevance": 0.9, "hallucination": 0.0}}
         """
         
         try:
             score_resp = eval_sys.llm.invoke([{"role": "user", "content": eval_prompt}]).content
+            if "```json" in score_resp:
+                score_resp = score_resp.split("```json")[1].split("```")[0].strip()
+            elif "```" in score_resp:
+                score_resp = score_resp.split("```")[1].split("```")[0].strip()
             scores = json.loads(score_resp)
         except:
-            scores = {"correctness": 0.0, "groundedness": 0.0, "completeness": 0.0}
+            scores = {"correctness": 0.0, "groundedness": 0.0, "relevance": 0.0, "hallucination": 0.0}
             
         print(f"Results: {scores}")
         results.append({
@@ -86,14 +92,31 @@ def run_eval():
     print("Evaluation Summary")
     print("=" * 60)
     
-    avg_correctness = sum(r["scores"]["correctness"] for r in results) / len(results)
-    avg_groundedness = sum(r["scores"]["groundedness"] for r in results) / len(results)
+    avg_correctness = sum(r["scores"].get("correctness", 0.0) for r in results) / len(results)
+    avg_groundedness = sum(r["scores"].get("groundedness", 0.0) for r in results) / len(results)
+    avg_relevance = sum(r["scores"].get("relevance", 0.0) for r in results) / len(results)
+    avg_hallucination = sum(r["scores"].get("hallucination", 0.0) for r in results) / len(results)
     avg_latency = sum(r["latency"] for r in results) / len(results)
     
-    print(f"Avg Correctness:  {avg_correctness:.2f}")
-    print(f"Avg Groundedness: {avg_groundedness:.2f}")
-    print(f"Avg Latency:     {avg_latency:.0f}ms")
+    print(f"Avg Correctness:   {avg_correctness:.2f}")
+    print(f"Avg Groundedness:  {avg_groundedness:.2f}")
+    print(f"Avg Relevance:     {avg_relevance:.2f}")
+    print(f"Avg Hallucination: {avg_hallucination:.2f}")
+    print(f"Avg Latency:       {avg_latency:.0f}ms")
     print("=" * 60)
+
+    # Save to database
+    from src.core.config import EMBEDDING_VERSION
+    report = {
+        "avg_groundedness": avg_groundedness,
+        "avg_relevance": avg_relevance,
+        "avg_hallucination": avg_hallucination,
+        "avg_correctness": avg_correctness,
+        "avg_latency": avg_latency,
+        "total_queries": len(results)
+    }
+    eval_sys.log_benchmark(version=EMBEDDING_VERSION, results=report)
+    print("[Database] Saved benchmark results to evaluations.db")
 
 if __name__ == "__main__":
     run_eval()

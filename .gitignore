@@ -203,3 +203,6 @@ memory.db
 2_foundations/community_contributions
 # Added by code-review-graph
 .code-review-graph/
+
+# Local scratch files
+scratch/

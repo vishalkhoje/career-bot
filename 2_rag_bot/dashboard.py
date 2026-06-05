@@ -169,6 +169,14 @@ def get_dashboard_data(num_queries=10):
     return stats_markdown, fig_latency, fig_scores, table_df, bench_df, fig_live
 
 def build_dashboard():
+    def trigger_benchmark():
+        try:
+            from tests.run_offline_eval import run_eval
+            run_eval()
+        except Exception as e:
+            print(f"[Dashboard] Benchmark execution failed: {e}")
+        return load_benchmark_data()
+
     with gr.Blocks(title="Career Bot Analytics", theme=gr.themes.Soft()) as demo:
         gr.Markdown("# 🚀 Career Bot Analytics Dashboard")
         gr.Markdown("Deep observability into LLM performance, benchmarking, and cost.")
@@ -197,6 +205,8 @@ def build_dashboard():
 
             with gr.Tab("🧪 Benchmark Results"):
                 gr.Markdown("### 🏁 Offline Gold Dataset Performance")
+                with gr.Row():
+                    run_bench_btn = gr.Button("🧪 Run Offline Benchmark (takes ~45s)", variant="secondary")
                 bench_table = gr.Dataframe(interactive=False)
                 
         def refresh(n):
@@ -207,6 +217,11 @@ def build_dashboard():
             refresh, 
             inputs=[num_queries_slider],
             outputs=[stats_output, latency_plot, scores_plot, eval_table, bench_table, live_performance_plot]
+        )
+        
+        run_bench_btn.click(
+            trigger_benchmark,
+            outputs=[bench_table]
         )
         
         num_queries_slider.change(
