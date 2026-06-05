@@ -82,8 +82,8 @@ uv pip install -r 2_rag_bot/requirements.txt
 cd 2_rag_bot
 uv run ingest.py
 
-# 3. Start the chat server
-uv run app-rag.py
+# 3. Start the combined chatbot & dashboard
+uv run python app.py
 ```
 
 ### 4. Configuration
@@ -109,10 +109,13 @@ LANGSMITH_API_KEY=your_langsmith_key
 ## 🚀 Running the Project
 
 ### Option A: The Production RAG Bot (Recommended)
-Navigate to `2_rag_bot/`:
-1.  **Ingest Data**: `python3 ingest.py` (or `uv run ingest.py`)
-2.  **Start Server**: `python3 app-rag.py` (or `uv run app-rag.py`) (Port 7860)
-3.  **Start Dashboard**: `python3 dashboard.py` (or `uv run dashboard.py`) (Port 7861)
+To run the Chatbot and the Analytics Dashboard integrated in tabs under a single page:
+- **Run Combined App**: `uv run python app.py` (Port 7860)
+
+Alternatively, you can run them individually:
+1.  **Ingest Data**: `uv run python 2_rag_bot/ingest.py`
+2.  **Start Chatbot Only**: `uv run python 2_rag_bot/app-rag.py` (Port 7860)
+3.  **Start Dashboard Only**: `uv run python 2_rag_bot/dashboard.py` (Port 7861)
 
 ### Option B: The Lightweight Simple Bot
 Navigate to `1_simple_bot/`:
