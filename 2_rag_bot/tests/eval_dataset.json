@@ -38,5 +38,25 @@
         "query": "How much did Vishal reduce cloud costs at MathCo?",
         "expected_answer": "Vishal reduced cloud costs by approximately 25% (around $300/month) using auto-scaling and efficient resource utilization.",
         "category": "Metrics"
+    },
+    {
+        "query": "Tell me about the AI-Powered Customer Support Bot Platform.",
+        "expected_answer": "Vishal designed and developed an enterprise-grade AI Customer Support Bot using an Agentic RAG architecture at Mathco. The platform features orchestrator agents for intent detection, MCP integrations, conversation memory, human escalation workflows, and a guardrail system.",
+        "category": "Projects"
+    },
+    {
+        "query": "What was the purpose of the AI-Powered Career Conversation Chatbot?",
+        "expected_answer": "It is a personal project where Vishal built an AI-driven chatbot to allow recruiters and stakeholders to interactively explore his professional background, technical expertise, and project experience using a RAG + Vector Search architecture.",
+        "category": "Projects"
+    },
+    {
+        "query": "How did Vishal handle the prompt injection incident in his AI system?",
+        "expected_answer": "After a prompt injection incident that misrouted 0.4% of production queries to unintended tool endpoints, Vishal designed and deployed a guardrail system implementing policy enforcement at the I/O boundary to prevent recurrence.",
+        "category": "Incidents"
+    },
+    {
+        "query": "What was Vishal's contribution to improving retrieval precision for the customer-facing AI agent?",
+        "expected_answer": "He improved retrieval precision by 31 percentage points by implementing hybrid search (vector + BM25), addressing an 18% loss on long-tail queries with only a +22ms latency overhead.",
+        "category": "Metrics"
     }
 ]

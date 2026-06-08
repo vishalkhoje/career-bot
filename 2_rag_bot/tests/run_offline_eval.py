@@ -1,8 +1,8 @@
 """
 2_rag_bot/tests/run_offline_eval.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Offline evaluation runner for the Career Bot.
-Runs the gold-standard dataset through the agent and scores results.
+Offline evaluation runner for the Career Bot using RAGAS framework.
+Runs the gold-standard dataset through the agent and scores results using Ragas.
 """
 
 import os
@@ -17,9 +17,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src import CareerAgent
 from src import EvaluationSystem
 
+from datasets import Dataset
+from ragas import evaluate
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+    context_precision,
+    context_recall,
+)
+
 def run_eval():
     print("=" * 60)
-    print("Career Bot Offline Evaluation")
+    print("Career Bot Offline Evaluation with RAGAS")
     print("=" * 60)
 
     tests_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,13 +43,19 @@ def run_eval():
     agent = CareerAgent()
     eval_sys = EvaluationSystem()
     
-    results = []
+    data = {
+        "question": [],
+        "answer": [],
+        "contexts": [],
+        "ground_truth": []
+    }
+    latencies = []
     
     for i, item in enumerate(dataset):
         query = item["query"]
         expected = item.get("expected_answer", item.get("expected", ""))
         
-        print(f"\n[{i+1}/{len(dataset)}] Query: {query}")
+        print(f"\n[{i+1}/{len(dataset)}] Processing Query: {query}")
         
         start_time = time.time()
         response = ""
@@ -49,71 +64,77 @@ def run_eval():
             response = chunk
             
         latency = (time.time() - start_time) * 1000
+        latencies.append(latency)
         
-        # Comprehensive Evaluation using LLM
-        print("Scoring...")
-        eval_prompt = f"""
-        You are a Quality Assurance Specialist for a RAG system.
-        Evaluate the AI's response against the expected answer.
-        
-        QUERY: {query}
-        EXPECTED: {expected}
-        ACTUAL RESPONSE: {response}
-        
-        Score from 0.0 to 1.0 for:
-        1. correctness: Is the info factually accurate compared to expected?
-        2. groundedness: Does it stay within the bounds of what was asked?
-        3. relevance: Does it directly address the query?
-        4. hallucination: Does it contain unsupported info not in expected?
-        
-        Format: JSON only. Example: {{"correctness": 0.9, "groundedness": 1.0, "relevance": 0.9, "hallucination": 0.0}}
-        """
-        
+        # Retrieve context used (approximate since agent uses internal retriever)
         try:
-            score_resp = eval_sys.llm.invoke([{"role": "user", "content": eval_prompt}]).content
-            if "```json" in score_resp:
-                score_resp = score_resp.split("```json")[1].split("```")[0].strip()
-            elif "```" in score_resp:
-                score_resp = score_resp.split("```")[1].split("```")[0].strip()
-            scores = json.loads(score_resp)
-        except:
-            scores = {"correctness": 0.0, "groundedness": 0.0, "relevance": 0.0, "hallucination": 0.0}
-            
-        print(f"Results: {scores}")
-        results.append({
-            "query": query,
-            "response": response,
-            "scores": scores,
-            "latency": latency
-        })
+            context = agent.retriever.retrieve(query)
+            contexts = [context] if context else [""]
+        except Exception as e:
+            print(f"Error retrieving context: {e}")
+            contexts = [""]
+        
+        data["question"].append(query)
+        data["answer"].append(response)
+        data["contexts"].append(contexts)
+        data["ground_truth"].append(expected)
 
-    # Summary
+    # Convert to HuggingFace Dataset
     print("\n" + "=" * 60)
-    print("Evaluation Summary")
+    print("Running RAGAS Evaluation...")
+    print("This may take some time depending on the dataset size.")
     print("=" * 60)
     
-    avg_correctness = sum(r["scores"].get("correctness", 0.0) for r in results) / len(results)
-    avg_groundedness = sum(r["scores"].get("groundedness", 0.0) for r in results) / len(results)
-    avg_relevance = sum(r["scores"].get("relevance", 0.0) for r in results) / len(results)
-    avg_hallucination = sum(r["scores"].get("hallucination", 0.0) for r in results) / len(results)
-    avg_latency = sum(r["latency"] for r in results) / len(results)
+    hf_dataset = Dataset.from_dict(data)
     
-    print(f"Avg Correctness:   {avg_correctness:.2f}")
-    print(f"Avg Groundedness:  {avg_groundedness:.2f}")
-    print(f"Avg Relevance:     {avg_relevance:.2f}")
-    print(f"Avg Hallucination: {avg_hallucination:.2f}")
-    print(f"Avg Latency:       {avg_latency:.0f}ms")
+    try:
+        result = evaluate(
+            hf_dataset,
+            metrics=[
+                faithfulness,
+                answer_relevancy,
+                context_precision,
+                context_recall,
+            ],
+            raise_exceptions=False
+        )
+    except Exception as e:
+        print(f"RAGAS evaluation failed: {e}")
+        return
+
+    print("\n" + "=" * 60)
+    metrics = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+    scores = {}
+    for m in metrics:
+        try:
+            val = result[m]
+            if isinstance(val, list):
+                scores[m] = float(sum(val) / len(val)) if val else 0.0
+            else:
+                scores[m] = float(val)
+        except Exception:
+            scores[m] = 0.0
+
+    print(f"Faithfulness:       {scores['faithfulness']:.4f}")
+    print(f"Answer Relevancy:   {scores['answer_relevancy']:.4f}")
+    print(f"Context Precision:  {scores['context_precision']:.4f}")
+    print(f"Context Recall:     {scores['context_recall']:.4f}")
+    
+    avg_latency = sum(latencies) / len(latencies) if latencies else 0
+    print(f"Avg Latency:        {avg_latency:.0f}ms")
     print("=" * 60)
 
     # Save to database
     from src.core.config import EMBEDDING_VERSION
     report = {
-        "avg_groundedness": avg_groundedness,
-        "avg_relevance": avg_relevance,
-        "avg_hallucination": avg_hallucination,
-        "avg_correctness": avg_correctness,
+        "avg_groundedness": scores["faithfulness"],
+        "avg_relevance": scores["answer_relevancy"],
+        "avg_hallucination": 1.0 - scores["faithfulness"],
+        "avg_correctness": (scores["context_precision"] + scores["context_recall"]) / 2.0,
+        "context_precision": scores["context_precision"],
+        "context_recall": scores["context_recall"],
         "avg_latency": avg_latency,
-        "total_queries": len(results)
+        "total_queries": len(dataset)
     }
     eval_sys.log_benchmark(version=EMBEDDING_VERSION, results=report)
     print("[Database] Saved benchmark results to evaluations.db")

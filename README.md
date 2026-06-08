@@ -138,6 +138,15 @@ The production version implements **Deep Observability**:
 
 ## 🧪 Testing
 
+### RAGAS Offline Evaluation
+To evaluate the RAG bot's performance on the offline gold-standard dataset using the RAGAS framework (requires OpenAI API tokens):
+
+```bash
+uv run python 2_rag_bot/tests/run_offline_eval.py
+```
+This script computes Context Precision, Context Recall, Faithfulness, and Answer Relevancy, saving the summary to the database (`evaluations.db`).
+
+### System Verification
 Run the verification suite for the RAG bot:
 ```bash
 cd 2_rag_bot
