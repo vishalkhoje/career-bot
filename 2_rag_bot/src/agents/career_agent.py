@@ -259,17 +259,19 @@ class CareerAgent:
                     return ""
             
             if config.USE_AGENT_WORKFLOW:
-                print(f"[Steps 2+3: PARALLEL] Intent Classifier + Retriever launching...")
+                print(f"[Steps 2+3: PARALLEL] Intent Classifier + Retriever + Learner launching...")
                 
-                with ThreadPoolExecutor(max_workers=2) as executor:
+                with ThreadPoolExecutor(max_workers=3) as executor:
                     intent_future = executor.submit(_classify_intent)
                     retrieval_future = executor.submit(_retrieve_context)
+                    learner_future = executor.submit(self.learner.get_relevant_corrections, message)
                     
                     intent = intent_future.result()
                     context = retrieval_future.result()
+                    learned_examples = learner_future.result()
                 
                 parallel_ms = (time.time() - step_start) * 1000
-                latency_breakdown['intent+retrieval_ms (parallel)'] = parallel_ms
+                latency_breakdown['intent+retrieval+learner_ms (parallel)'] = parallel_ms
                 print(f"[Agent] Classified as: {intent} | Retrieval done | Parallel time: {parallel_ms:.0f}ms")
                 
                 execution_steps.append(f"Intent: {intent}")
@@ -279,6 +281,7 @@ class CareerAgent:
                 intent = "FACTUAL"
                 execution_steps.append("Intent: FACTUAL (Default)")
                 context = _retrieve_context()
+                learned_examples = self.learner.get_relevant_corrections(message)
                 latency_breakdown['retrieval_ms'] = (time.time() - step_start) * 1000
                 execution_steps.append("Retrieval")
             
@@ -309,7 +312,6 @@ class CareerAgent:
                 latency_breakdown['planner_ms'] = (time.time() - step_start) * 1000
                 
                 if intent == "ANALYTICAL":
-                    learned_examples = self.learner.get_relevant_corrections(message)
                     
                     full_response = ""
                     history_messages = self._normalise_history(history)
@@ -397,7 +399,6 @@ class CareerAgent:
             elif intent == "FACTUAL":
                 step_start = time.time()
                 print("[Step 4/5: LLM Generation] Generating standard RAG response...")
-                learned_examples = self.learner.get_relevant_corrections(message)
                 messages = [SystemMessage(content=build_system_prompt(context, learned_examples=learned_examples))]
                 messages.extend(self._normalise_history(history))
                 messages.append(HumanMessage(content=message))
