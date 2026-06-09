@@ -110,9 +110,9 @@ def build_intent_classifier_prompt(query: str) -> str:
     - Hypothetical scenarios.
     
     FACTUAL queries include:
-    - Questions about specific roles, companies, or dates.
+    - Questions about specific roles, companies, projects, or experience.
     - Requests for contact info or links.
-    - Simple "What" or "Where" questions related to the candidate.
+    - Simple "What", "Where", or "Explain" questions related to the candidate's career.
     
     GENERIC queries include:
     - Casual conversation, greetings (e.g., "hello", "hi vishal", "how are you").
