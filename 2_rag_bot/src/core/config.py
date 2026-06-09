@@ -25,6 +25,8 @@ EMBEDDING_VERSION: str = "v1.2"
 MAX_MEMORY_TURNS = 5
 COST_ALERT_THRESHOLD = 0.01  # Alert if a single request exceeds $0.01
 LATENCY_ALERT_THRESHOLD = 5000 # Alert if response takes > 5 seconds
+DAILY_COST_LIMIT = 2.00 # Max USD cost allowed per day
+CONTACT_EMAIL = "vishalkhoje@gmail.com" # Fallback email when limit is reached
 # ── Pinecone ──────────────────────────────────────────────────────────────────
 # Secrets
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
@@ -45,7 +47,7 @@ ENV: str = os.getenv("ENV", "production")
 
 # ── Retrieval ─────────────────────────────────────────────────────────────────
 # Number of chunks to retrieve per query (raw retrieval)
-RETRIEVAL_K: int = 5
+RETRIEVAL_K: int = 4
 # Enable hybrid + re-ranking pipeline
 USE_ADVANCED_RETRIEVAL: bool = True
 # Final number of chunks after re-ranking

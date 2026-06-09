@@ -191,12 +191,23 @@ class CareerAgent:
         latency_breakdown = {}
         tool_calls_counts = []
         iterations_counts = []
+        full_response = ""
+        context = ""
+        intent = "UNKNOWN"
 
         from ..helper.utils import retry_with_backoff, safe_llm_call
 
         try:
             # ── Immediate Feedback ─────────────────────────────────────────────
             yield "🔍 *Analyzing your question...*"
+
+            # ── Step 0.5: Enforce Daily Cost Limit ─────────────────────────────
+            current_cost = Observability.get_daily_cost()
+            if current_cost >= config.DAILY_COST_LIMIT:
+                print(f"[Agent] 🚨 Daily cost limit reached (${current_cost:.2f} / ${config.DAILY_COST_LIMIT:.2f})")
+                yield f"I've reached my maximum daily limit for answering questions. Please reach out to me directly at **{config.CONTACT_EMAIL}**!"
+                status = "rejected"
+                return
 
             # ── Step 0: Expire stale cache ─────────────────────────────────────
             self.cache.check_expiry()

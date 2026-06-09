@@ -45,6 +45,34 @@ class Observability:
         return tokens * rate_per_token
 
     @staticmethod
+    def get_daily_cost() -> float:
+        """
+        Calculates the total cost incurred today by parsing the active metrics file.
+        Because TimedRotatingFileHandler rotates at midnight, 'career_bot_metrics.jsonl' 
+        always contains only today's logs.
+        """
+        import os
+        log_file = "career_bot_metrics.jsonl"
+        total_cost = 0.0
+        if not os.path.exists(log_file):
+            return total_cost
+            
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                        total_cost += float(data.get("cost_usd", 0.0))
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            print(f"[Monitoring] Error reading daily cost: {e}")
+            
+        return total_cost
+
+    @staticmethod
     def check_alerts(event: Dict[str, Any]):
         """
         Check for conditions that should trigger an alert.

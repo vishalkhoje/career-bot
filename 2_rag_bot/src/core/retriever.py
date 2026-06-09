@@ -59,7 +59,7 @@ class CareerRetriever:
             
             # Use cached docs if available
             if CareerRetriever._bm25_docs_cache is None:
-                all_docs = self.vector_store.similarity_search("career profile overview", k=20)
+                all_docs = self.vector_store.similarity_search("career profile overview", k=8)
                 CareerRetriever._bm25_docs_cache = all_docs
                 print(f"[Retriever] Fetched {len(all_docs)} docs for BM25 (cached for future).")
             else:
@@ -92,13 +92,25 @@ class CareerRetriever:
             print(f"[Retriever] Failed to setup advanced pipeline: {exc}. Falling back to basic search.")
             self.ensemble_retriever = None
 
+    def warmup(self):
+        """
+        Eagerly initialize the advanced pipeline at startup.
+        Call this in a background thread so the UI launches immediately
+        but the first user query doesn't pay the cold-start penalty.
+        """
+        if config.USE_ADVANCED_RETRIEVAL and not self._pipeline_initialized:
+            print("[Retriever] 🔥 Warming up retrieval pipeline at startup...")
+            self._setup_advanced_pipeline()
+            self._pipeline_initialized = True
+            print("[Retriever] ✅ Warmup complete — first query will be fast.")
+
     def retrieve(self, query: str, metadata_filter: dict = None) -> str:
         """
         Retrieve context using the best available pipeline.
         Includes a default metadata filter for the current EMBEDDING_VERSION.
         """
         try:
-            # 0. Lazy Load Advanced Pipeline
+            # 0. Lazy Load Advanced Pipeline (only if warmup didn't run)
             if config.USE_ADVANCED_RETRIEVAL and not self._pipeline_initialized:
                 self._setup_advanced_pipeline()
                 self._pipeline_initialized = True
@@ -118,7 +130,7 @@ class CareerRetriever:
             
             top_score = docs_with_scores[0][1] if docs_with_scores else 0
             
-            if top_score >= 0.85:
+            if top_score >= 0.75:
                 print(f"[Retriever] ⚡ High Confidence ({top_score:.2f}). Skipping reranking pipeline.")
                 docs = [doc for doc, score in docs_with_scores]
             else:

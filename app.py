@@ -13,6 +13,10 @@ from dashboard import build_dashboard
 
 agent = CareerAgent()
 
+# Warm up the retrieval pipeline in background so the first query is fast
+import threading
+threading.Thread(target=agent.retriever.warmup, daemon=True).start()
+
 # Build the separate Gradio Blocks
 chat_ui = build_ui(agent)
 dashboard_ui = build_dashboard()
