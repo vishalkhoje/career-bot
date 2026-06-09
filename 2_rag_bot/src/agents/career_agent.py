@@ -130,7 +130,7 @@ class CareerAgent:
             api_key=config.OPENAI_API_KEY,
             temperature=0,
             cache=False,
-        ).bind_tools(TOOL_SCHEMAS)
+        )
 
         self.llm = ChatOpenAI(
             model=config.OPENAI_CHAT_MODEL,
@@ -226,10 +226,15 @@ class CareerAgent:
                     from .prompts import build_intent_classifier_prompt
                     intent_prompt = build_intent_classifier_prompt(message)
                     with get_openai_callback() as cb:
-                        resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)]).content.strip()
+                        resp = self.non_streaming_llm.invoke([HumanMessage(content=intent_prompt)], max_tokens=10).content.strip()
                         _track_tokens("Intent Classifier", cb)
                     print(f"[Tokens] Intent Classifier: {cb.total_tokens} tokens")
-                    return "ANALYTICAL" if "ANALYTICAL" in resp.upper() else "FACTUAL"
+                    resp_upper = resp.upper()
+                    if "ANALYTICAL" in resp_upper:
+                        return "ANALYTICAL"
+                    elif "GENERIC" in resp_upper:
+                        return "GENERIC"
+                    return "FACTUAL"
                 except Exception as e:
                     print(f"[Fallback] Intent classification failed: {e}. Defaulting to FACTUAL.")
                     return "FACTUAL"
@@ -274,21 +279,19 @@ class CareerAgent:
                 step_start = time.time()
                 print("[Step 4/5: Planner Agent] Breaking down the reasoning...")
                 execution_steps.append("Planning")
-                yield f"📋 *Strategy: Creating a multi-step plan to answer your complex query...*"
+                yield f"📋 *Strategy: Creating a multi-step plan to answer your complex query...*\n\n> "
                 
-                @retry_with_backoff(retries=2)
-                def get_plan():
+                plan = ""
+                try:
                     planner_prompt = build_planner_prompt(message, context)
                     with get_openai_callback() as cb:
-                        res = self.non_streaming_llm.invoke([HumanMessage(content=planner_prompt)]).content
+                        for chunk in self.llm.stream([HumanMessage(content=planner_prompt)]):
+                            if chunk.content:
+                                plan += chunk.content
+                                yield chunk.content
                         _track_tokens("Planner Agent", cb)
                     print(f"[Tokens] Planner Agent: {cb.total_tokens} tokens")
-                    return res
-                
-                try:
-                    plan = get_plan()
-                    print(f"[Agent] Strategic Plan: {plan.replace(chr(10), ' | ')}")
-                    yield f"🎯 *Plan Ready: {plan.split(chr(10))[0]}... Generating detailed answer...*\n\n"
+                    yield f"\n\n🎯 *Generating detailed answer based on plan...*\n\n"
                 except Exception:
                     print("[Fallback] Planning failed. Falling back to simple RAG response.")
                     intent = "FACTUAL"
@@ -369,8 +372,18 @@ class CareerAgent:
                 elif intent == "ANALYTICAL":
                     print("[Step 5/5: Critic Agent] ⏭ Skipped (context is short, low risk)")
             
+            # ── Generic Branch: Fast Rejection ────────────────────────────────
+            if intent == "GENERIC":
+                step_start = time.time()
+                print("[Step 4/5: Generic Agent] Rejecting generic query...")
+                generic_response = "I'm sorry, but I am an AI assistant specifically built to answer questions about Vishal's career profile and professional background. I cannot answer generic queries, write code, or engage in unrelated discussions."
+                yield generic_response
+                full_response = generic_response
+                execution_steps.append("Generic Agent")
+                latency_breakdown['generic_ms'] = (time.time() - step_start) * 1000
+
             # ── Fallback Branch: Standard RAG flow ────────────────────────────
-            if intent == "FACTUAL":
+            elif intent == "FACTUAL":
                 step_start = time.time()
                 print("[Step 4/5: LLM Generation] Generating standard RAG response...")
                 learned_examples = self.learner.get_relevant_corrections(message)

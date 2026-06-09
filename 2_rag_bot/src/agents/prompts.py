@@ -101,7 +101,7 @@ Avoid repeating the errors highlighted in the 'Correction' field.
 def build_intent_classifier_prompt(query: str) -> str:
     return f"""
     You are an Intent Classification Agent. 
-    Analyze the user query and decide if it is a simple 'FACTUAL' lookup or a complex 'ANALYTICAL' reasoning task.
+    Analyze the user query and decide if it is 'FACTUAL', 'ANALYTICAL', or 'GENERIC'.
     
     ANALYTICAL queries include:
     - Suitability/Fitment checks (e.g., "Am I a good fit for X?")
@@ -112,11 +112,16 @@ def build_intent_classifier_prompt(query: str) -> str:
     FACTUAL queries include:
     - Questions about specific roles, companies, or dates.
     - Requests for contact info or links.
-    - Simple "What" or "Where" questions.
+    - Simple "What" or "Where" questions related to the candidate.
+    
+    GENERIC queries include:
+    - Casual conversation, greetings (e.g., "hello", "hi vishal", "how are you").
+    - Coding requests (e.g., "write python code", "factorial in javascript").
+    - Completely unrelated questions (e.g., "what is your son's name", "food you like").
 
     User Query: {query}
     
-    Response: Output ONLY 'FACTUAL' or 'ANALYTICAL'.
+    Response: Output ONLY 'FACTUAL', 'ANALYTICAL', or 'GENERIC'.
     """
 
 def build_planner_prompt(query: str, context: str) -> str:

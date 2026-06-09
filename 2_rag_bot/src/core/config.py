@@ -26,6 +26,8 @@ MAX_MEMORY_TURNS = 5
 COST_ALERT_THRESHOLD = 0.01  # Alert if a single request exceeds $0.01
 LATENCY_ALERT_THRESHOLD = 5000 # Alert if response takes > 5 seconds
 # ── Pinecone ──────────────────────────────────────────────────────────────────
+# Secrets
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "career-bot")
 
