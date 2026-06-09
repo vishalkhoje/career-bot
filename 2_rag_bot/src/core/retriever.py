@@ -44,8 +44,7 @@ class CareerRetriever:
         
         # 2. Setup Advanced Components if enabled
         self.ensemble_retriever = None
-        if config.USE_ADVANCED_RETRIEVAL:
-            self._setup_advanced_pipeline()
+        self._pipeline_initialized = False
 
     # Class-level cache: only load BM25 docs once per process
     _bm25_docs_cache = None
@@ -99,6 +98,11 @@ class CareerRetriever:
         Includes a default metadata filter for the current EMBEDDING_VERSION.
         """
         try:
+            # 0. Lazy Load Advanced Pipeline
+            if config.USE_ADVANCED_RETRIEVAL and not self._pipeline_initialized:
+                self._setup_advanced_pipeline()
+                self._pipeline_initialized = True
+
             # 1. Prepare Filter
             # Always enforce the version filter to avoid stale data.
             search_filter = {"version": config.EMBEDDING_VERSION}
@@ -114,7 +118,7 @@ class CareerRetriever:
             
             top_score = docs_with_scores[0][1] if docs_with_scores else 0
             
-            if top_score >= 0.9:
+            if top_score >= 0.85:
                 print(f"[Retriever] ⚡ High Confidence ({top_score:.2f}). Skipping reranking pipeline.")
                 docs = [doc for doc, score in docs_with_scores]
             else:

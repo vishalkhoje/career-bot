@@ -137,6 +137,7 @@ class CareerAgent:
             api_key=config.OPENAI_API_KEY,
             temperature=0,
             cache=False,
+            streaming=True,
             model_kwargs={"stream_options": {"include_usage": True}}
         ).bind_tools(TOOL_SCHEMAS)
 

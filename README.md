@@ -102,6 +102,10 @@ AZURE_OPENAI_DEPLOYMENT=gpt-4o
 # Observability
 LANGCHAIN_TRACING_V2=true
 LANGSMITH_API_KEY=your_langsmith_key
+
+# Optional: Push Notifications
+PUSHOVER_TOKEN=your_token
+PUSHOVER_USER=your_user
 ```
 
 ---
