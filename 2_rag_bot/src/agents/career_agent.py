@@ -445,6 +445,10 @@ class CareerAgent:
             for agent, stats in tokens_by_agent.items():
                 print(f"  {agent:18}: {stats['total']:4} tokens (${stats['cost']:.6f})")
                 total_cost += stats['cost']
+                
+            # Recalculate tokens_used to include the entire workflow's tokens
+            tokens_used = sum([stats['total'] for stats in tokens_by_agent.values()])
+            
             print(f"  {'TOTAL':18}: {tokens_used:4} tokens (${total_cost:.6f})")
             print(f"------------------------------")
 
@@ -471,7 +475,7 @@ class CareerAgent:
 
             # ── Background Evaluation (ASYNC — does NOT block the user) ───────
             if not cache_hit and status == "success":
-                def _background_eval(q, resp, ctx, lat, tok, intent_val, existing_scores):
+                def _background_eval(q, resp, ctx, lat, tok, intent_val, existing_scores, req_id):
                     try:
                         from ..database.evaluation import EvaluationSystem
                         eval_sys = EvaluationSystem()
@@ -493,7 +497,7 @@ class CareerAgent:
                             relevance_score=scores.get("relevance", 0.0),
                             correctness_score=scores.get("correctness", 0.0),
                             groundedness_score=scores.get("groundedness", 0.0),
-                            metadata={"intent": intent_val}
+                            metadata={"intent": intent_val, "request_id": req_id}
                         )
                         print(f"[Eval] ✅ Background log complete: ID={eval_id} | G={scores.get('groundedness',0):.2f} | R={scores.get('relevance',0):.2f}")
                     except Exception as e:
@@ -501,7 +505,7 @@ class CareerAgent:
                 
                 thread = threading.Thread(
                     target=_background_eval,
-                    args=(message, full_response, context, latency_ms, tokens_used, intent, eval_scores),
+                    args=(message, full_response, context, latency_ms, tokens_used, intent, eval_scores, request_id),
                     daemon=True
                 )
                 thread.start()

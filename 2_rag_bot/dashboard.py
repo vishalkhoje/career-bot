@@ -49,6 +49,7 @@ def load_monitoring_data():
     df = pd.DataFrame(data)
     if not df.empty:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values(by='timestamp', ascending=False).reset_index(drop=True)
     return df
 
 def load_benchmark_data():
@@ -137,9 +138,27 @@ def get_dashboard_data(num_queries=10):
 
     # 4. Detailed Table (Merged) - Optimized for UI performance
     if not eval_df.empty and not mon_df.empty:
-        eval_df['query_preview_id'] = eval_df['query'].str[:100]
-        merged_df = pd.merge(eval_df, mon_df[['query_preview', 'steps', 'cost_usd']], 
-                             left_on='query_preview_id', right_on='query_preview', how='left')
+        # Extract request_id from metadata if available to prevent Cartesian products
+        if 'metadata' in eval_df.columns:
+            def get_req_id(m):
+                try:
+                    return json.loads(m).get('request_id') if isinstance(m, str) else None
+                except:
+                    return None
+            eval_df['request_id'] = eval_df['metadata'].apply(get_req_id)
+        else:
+            eval_df['request_id'] = None
+            
+        if 'request_id' in mon_df.columns:
+            # Join accurately on request_id to avoid multiplying rows for duplicate queries
+            merged_df = pd.merge(eval_df, mon_df[['request_id', 'steps', 'cost_usd']], 
+                                 on='request_id', how='left')
+        else:
+            # Fallback if no request_ids found
+            eval_df['query_preview_id'] = eval_df['query'].str[:100]
+            merged_df = pd.merge(eval_df, mon_df[['query_preview', 'steps', 'cost_usd']], 
+                                 left_on='query_preview_id', right_on='query_preview', how='left')
+            merged_df = merged_df.drop_duplicates(subset=['id']) if 'id' in merged_df.columns else merged_df
         
         cols_to_show = ['timestamp', 'query', 'response', 'groundedness_score', 'steps', 'cost_usd']
         available_cols = [c for c in cols_to_show if c in merged_df.columns]
