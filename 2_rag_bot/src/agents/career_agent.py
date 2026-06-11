@@ -214,7 +214,7 @@ class CareerAgent:
 
             # ── Step 1: Cache Check ────────────────────────────────────────────
             print(f"\n[Step 1/5: Cache Check] query='{message[:50]}...'")
-            cached, query_emb = self.cache.get_semantic(message, threshold=0.65)
+            cached, query_emb = self.cache.get_semantic(message, threshold=0.85)
             if cached:
                 print("[Cache] ⚡ HIT — serving from SQLite")
                 cache_hit = True

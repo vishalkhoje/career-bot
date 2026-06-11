@@ -113,9 +113,9 @@ def build_intent_classifier_prompt(query: str) -> str:
     - Questions about specific roles, companies, projects, or experience.
     - Requests for contact info or links.
     - Simple "What", "Where", or "Explain" questions related to the candidate's career.
+    - Greetings and requests for introduction (e.g., "hello", "hi vishal", "how are you", "can you introduce yourself").
     
     GENERIC queries include:
-    - Casual conversation, greetings (e.g., "hello", "hi vishal", "how are you").
     - Coding requests (e.g., "write python code", "factorial in javascript").
     - Completely unrelated questions (e.g., "what is your son's name", "food you like").
 
